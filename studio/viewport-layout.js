@@ -1,3 +1,9 @@
+/** Shared semantic breakpoint: a short portrait is still a sheet. */
+export const COMPACT_LAYOUT_QUERY = '(max-width: 700px) and (min-height: 501px), (max-width: 700px) and (orientation: portrait)';
+export function isCompactLayout(width, height) { return width <= 700 && !(width > height && height <= 500); }
+export function resolveTheme(search = '') { const theme = new URLSearchParams(search).get('theme'); return ['glass', 'precision', 'gallery', 'soft', 'instrument'].includes(theme) ? theme : 'instrument'; }
+export function resolvePresentation(search = '') { return resolveTheme(search) === 'instrument' ? 'instrument' : 'glass'; }
+
 // Geometry is measured from the floating controls, never stored in a study.
 export function clearViewport({width,height,header,study,studyOnTop=false,panel,panelSide='left',dock,compact=false}){
  const gap=compact?10:16,edge=compact?10:20;
@@ -32,11 +38,14 @@ export function observeViewportLayout({root,host,header,study,panel,dock,dockGro
   // is fixed above that group, so keep the subject below its visible lower edge.
   const fixedStatus=status&&status.dataset.idle!=='true'&&getComputedStyle(status).position==='fixed'?bounds(status):null;
   const topBoundary=Math.max(headerBounds?.bottom??0,fixedStatus?.bottom??0);
-  const compact=window.matchMedia('(max-width: 700px)').matches;
+  const groupBounds=bounds(dockGroup)||bounds(dock);
+  const absoluteStatus=status&&status.dataset.idle!=='true'&&getComputedStyle(status).position==='absolute'?bounds(status):null;
+  const dockBounds=absoluteStatus?{top:Math.min(groupBounds?.top??Infinity,absoluteStatus.top)}:groupBounds;
+  const compact=window.matchMedia(COMPACT_LAYOUT_QUERY).matches;
   // CSS owns the portrait-tablet rail breakpoint; measure the same visible
   // layout without keeping a second breakpoint table in camera code.
   const studyOnTop=compact||!!(study&&getComputedStyle(study).getPropertyValue('--study-rail').trim()==='1');
-  return clearViewport({width:host.clientWidth,height:host.clientHeight,header:{bottom:topBoundary},study:bounds(study),studyOnTop,panel:bounds(panel),panelSide:panel?.dataset.panelSide||'left',dock:bounds(dockGroup)||bounds(dock),compact});
+  return clearViewport({width:host.clientWidth,height:host.clientHeight,header:{bottom:topBoundary},study:bounds(study),studyOnTop,panel:bounds(panel),panelSide:panel?.dataset.panelSide||'left',dock:dockBounds,compact});
  };
  const resized=new ResizeObserver(onChange);[header,study,panel,dock,dockGroup,status].filter(Boolean).forEach(element=>resized.observe(element));
  // Panel position can change while its size stays the same; also support the

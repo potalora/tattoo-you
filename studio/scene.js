@@ -1,3 +1,5 @@
+import {disposeStudioResources} from './renderer-lifecycle.js';
+import {createPreviewOrchestrator} from './preview-orchestrator.js';
 import * as THREE from 'three';
 import { attribute, uniform, texture, uv, vec3, normalWorld, bumpMap, normalMap, vec2, float } from 'three/tsl';
 import {createGalleryEnvironment} from './gallery-environment.js';
@@ -5,7 +7,7 @@ import {cameraView} from './camera-framing.js';
 import {createCameraMotion} from './camera-motion.js';
 import {handleCameraKey} from './camera-keyboard.js';
 import {constrainCameraToFloor,restoreCameraPose} from './camera-floor.js';
-import {applyCameraViewport} from './viewport-layout.js';
+import {applyCameraViewport,COMPACT_LAYOUT_QUERY} from './viewport-layout.js';
 import { OrbitControls } from './vendor/OrbitControls.js';
 import {createSurfaceClient} from './surface-client.js';
 import {createRenderScheduler} from './render-scheduler.js';
@@ -19,41 +21,23 @@ import {resolveBodyModel,LEGACY_MODEL_ID} from './model-catalog.js';
 import {createBodyLibrary} from './body-loader.js';
 import { REGION_TARGETS as targets, REGIONS } from './regions.js';
 export { REGIONS };
-function disposeStudioResources(owned){
- if(owned.disposal)return owned.disposal;
- // Cache ownership before stopping callbacks; resource release starts only
- // after submitted preview/ink work and its GPU fence have settled.
- owned.disposal=Promise.resolve().then(async()=>{
-  await Promise.allSettled([Promise.resolve().then(()=>owned.preview?.cancel()),...(owned.pending?.()||[])]);
-  try{if(owned.renderer?.backend?.isWebGPUBackend)await owned.renderer.backend.device?.queue.onSubmittedWorkDone();}catch{}
-  await Promise.allSettled([Promise.resolve().then(()=>owned.inkAtlas?.dispose()),Promise.resolve().then(()=>owned.preview?.dispose())]);
-  for(const resource of [owned.gallery,owned.library])try{await resource?.dispose();}catch{}
-  const loaded=await Promise.allSettled([...owned.textures.values()]);
-  for(const result of loaded)if(result.status==='fulfilled')owned.resources.add(result.value);
-  owned.textures.clear();
-  owned.scene?.traverse(object=>{if(object.isMesh){owned.resources.add(object.geometry);for(const material of Array.isArray(object.material)?object.material:[object.material])owned.resources.add(material);}});
-  for(const resource of owned.resources)try{resource?.dispose();}catch{}
-  owned.resources.clear();
-  try{await owned.renderer?.dispose();}catch{}
- });
- owned.stop();
- return owned.disposal;
-}
 export async function createStudio(host,options={}){
  if(typeof options==='function')options={onPlace:options};
+ const presentation=options.presentation==='instrument'?'instrument':'glass';
  const owned={resources:new Set(),textures:new Map(),listeners:[]};
- let disposed=false,version=0,previewSequence=0,cameraTimer;
+ let disposed=false,version=0,cameraTimer;
+ let previewController,applyingCamera=false,customCamera=false,viewName='body';
  const own=resource=>{owned.resources.add(resource);return resource;};
  const listen=(target,event,handler)=>{target.addEventListener(event,handler);owned.listeners.push([target,event,handler]);};
  const dispose=()=>disposeStudioResources(owned);
- owned.stop=()=>{disposed=true;version++;previewSequence++;clearTimeout(cameraTimer);owned.cameraMotion?.dispose();for(const [target,event,handler]of owned.listeners)target.removeEventListener(event,handler);owned.listeners.length=0;owned.observer?.disconnect();owned.scheduler?.dispose();owned.surface?.dispose();owned.controls?.dispose();owned.renderer?.domElement.remove();};
+ owned.stop=()=>{disposed=true;version++;if(previewController)previewController.state.sequence++;clearTimeout(cameraTimer);owned.cameraMotion?.dispose();for(const [target,event,handler]of owned.listeners)target.removeEventListener(event,handler);owned.listeners.length=0;owned.observer?.disconnect();owned.scheduler?.dispose();owned.surface?.dispose();owned.controls?.dispose();owned.renderer?.domElement.remove();};
  try{
  const kernel=await createGeometryKernel(),surface=owned.surface=createSurfaceClient();
  const forceWebGL=new URLSearchParams(location.search).get('renderer')==='webgl';
  const renderer=owned.renderer=new THREE.WebGPURenderer({antialias:true,preserveDrawingBuffer:true,forceWebGL});await renderer.init();
  renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setClearColor('#45423f');renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.NeutralToneMapping;renderer.toneMappingExposure=1;renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFShadowMap;
  host.appendChild(renderer.domElement);renderer.domElement.tabIndex=0;renderer.domElement.setAttribute('aria-label','Interactive body and tattoo placement. Use arrow keys to orbit, plus and minus to zoom.');
- const scene=owned.scene=new THREE.Scene();const gallery=owned.gallery=await createGalleryEnvironment(renderer,scene);
+ const scene=owned.scene=new THREE.Scene();const gallery=owned.gallery=await createGalleryEnvironment(renderer,scene,{presentation});
  const camera=new THREE.PerspectiveCamera(34,1,.01,20),controls=owned.controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.09;controls.minDistance=.22;controls.maxDistance=4.5;controls.maxPolarAngle=Math.PI*.91;
  const key=new THREE.DirectionalLight('#ffffff',3.4);key.position.set(-1.5,3,2.2);scene.add(key);
  key.castShadow=true;key.shadow.mapSize.set(host.clientWidth>700?2048:1024,host.clientWidth>700?2048:1024);Object.assign(key.shadow.camera,{left:-1.6,right:1.6,top:1.8,bottom:-1.8,near:.1,far:10});key.shadow.camera.updateProjectionMatrix();key.shadow.normalBias=.004;key.shadow.bias=-.00005;key.shadow.radius=5;key.userData.rasterOnly=true;key.target.position.set(0,.9,0);scene.add(key.target);
@@ -63,27 +47,45 @@ export async function createStudio(host,options={}){
  const skin=own(new THREE.MeshSSSNodeMaterial({roughness:.51,metalness:0,ior:1.4,specularIntensity:.85})),albedoSkin=own(new THREE.MeshBasicNodeMaterial({toneMapped:false,side:THREE.DoubleSide})),roughnessSkin=own(new THREE.MeshBasicNodeMaterial({toneMapped:false,side:THREE.DoubleSide})),referenceSkin=own(new THREE.MeshBasicNodeMaterial({toneMapped:false})),inspectionSkin=own(new THREE.MeshBasicNodeMaterial({toneMapped:false}));
  const floor=new THREE.Mesh(own(new THREE.PlaneGeometry(12,12)),own(new THREE.MeshBasicNodeMaterial({color:'#353431',toneMapped:false})));floor.rotation.x=-Math.PI/2;floor.position.y=-.005;scene.add(floor);
  const whiteInk=own(new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1));whiteInk.needsUpdate=true;whiteInk.colorSpace=THREE.LinearSRGBColorSpace;
+ // Texture uniforms are deduplicated by the initial texture UUID. These live
+ // bindings must start distinct before either swaps to its render target.
+ const whiteDetailInk=own(whiteInk.clone());whiteDetailInk.needsUpdate=true;
  const inkTexture=texture(whiteInk),inkAtlas=owned.inkAtlas=createInkAtlas(renderer);let inkSignature='',inkTask=null;
+ const inkDetailOffset=uniform(new THREE.Vector2()),inkDetailScale=uniform(new THREE.Vector2(1,1)),inkDetailEnabled=uniform(0);
+ const inkDetailUV=uv().sub(inkDetailOffset).div(inkDetailScale),inkDetailTexture=texture(whiteDetailInk,inkDetailUV);
+ const detailInside=inkDetailUV.x.greaterThanEqual(0).and(inkDetailUV.x.lessThanEqual(1)).and(inkDetailUV.y.greaterThanEqual(0)).and(inkDetailUV.y.lessThanEqual(1)).and(inkDetailEnabled.greaterThan(.5));
+ const inkColor=detailInside.select(inkDetailTexture.rgb,inkTexture.rgb);
  let anatomyNormal;
  const library=owned.library=createBodyLibrary({scene,skin,loader,surface}),bodies=library.loaded;
  let state=options.initialBody||BODY_DEFAULTS,active,lastShape='',placing=false,down=null,selected=new Set(),lastAnchor=null;
- let lighting='studio',lightingDirty=false,measurements={},quality='auto',adaptive=createAdaptiveQuality(),lastFrameTime=0,lastStatsTime=0,preview=null,previewTask=null,previewInitTask=null,previewPending=false,previewStill=false;
- owned.pending=()=>[inkTask,previewTask,previewInitTask];
+ let lighting='studio',lightingDirty=false,measurements={},quality='auto',adaptive=createAdaptiveQuality(),lastFrameTime=0,lastStatsTime=0;
+ owned.pending=()=>[inkTask,previewController?.state.intentTask,previewController?.state.task,previewController?.state.initTask];
  const decals=new Map(),textures=owned.textures,raycaster=new THREE.Raycaster();let updatingControls=false,floorCollision=false,frameCount=0,layoutSignature='',resizeSequence=0,captureRegion=null;
- function stats(){const now=performance.now();if(now-lastStatsTime<200)return;lastStatsTime=now;const r=renderer.info;Object.assign(host.dataset,{drawCalls:String(r.render?.drawCalls||r.render?.calls||0),triangles:String(r.render?.triangles||0),roomMeshes:String(gallery.metrics?.meshes||0),roomTriangles:String(gallery.metrics?.triangles||0),roomTextureBytes:String(gallery.metrics?.decodedTextureBytes||0)});options.onStats?.({renderer:renderer.backend.isWebGPUBackend?'WebGPU':'WebGL 2',kernel:kernel.backend||kernel.kind||'JavaScript',surface:surface.backend,triangles:r.render?.triangles||(active?.geometry.index.count||0)/3,drawCalls:r.render?.drawCalls||r.render?.calls||0,pixelRatio:renderer.getPixelRatio(),warnings:[...decals.values()].flatMap(d=>d.warnings||[])});}
- function cancelPreview(){previewSequence++;const wasPreview=previewPending||previewTask||previewStill;previewPending=false;previewStill=false;const cleanup=preview?.cancel();if(wasPreview&&!disposed)options.onPreview?.({phase:'idle',samples:0});return cleanup;}
- function requestRender(){if(disposed)return;cancelPreview();scheduler.request();}
+ function getMappingWarnings(){return [...decals].flatMap(([tattooId,decal])=>(decal.warnings||[]).map(message=>({tattooId,message})));}
+ function stats(){const now=performance.now();if(now-lastStatsTime<200)return;lastStatsTime=now;const r=renderer.info;Object.assign(host.dataset,{drawCalls:String(r.render?.drawCalls||r.render?.calls||0),triangles:String(r.render?.triangles||0),roomMeshes:String(gallery.metrics?.meshes||0),roomTriangles:String(gallery.metrics?.triangles||0),roomTextureBytes:String(gallery.metrics?.decodedTextureBytes||0)});options.onStats?.({renderer:renderer.backend.isWebGPUBackend?'WebGPU':'WebGL 2',kernel:kernel.backend||kernel.kind||'JavaScript',surface:surface.backend,triangles:r.render?.triangles||(active?.geometry.index.count||0)/3,drawCalls:r.render?.drawCalls||r.render?.calls||0,pixelRatio:renderer.getPixelRatio(),mappingWarnings:getMappingWarnings(),warnings:getMappingWarnings().map(record=>record.message)});}
+ function cancelPreview(){return previewController?.cancel();}
+ function requestRender(){if(previewController)previewController.requestRender();else if(!disposed)owned.scheduler?.request();}
  const motionPreference=window.matchMedia('(prefers-reduced-motion: reduce)');
  const cameraMotion=owned.cameraMotion=createCameraMotion({
   readPose:()=>({position:camera.position.toArray(),target:controls.target.toArray()}),
-  applyPose:pose=>{restoreCameraPose(camera,controls,pose);requestRender();},
+  applyPose:pose=>{applyingCamera=true;try{restoreCameraPose(camera,controls,pose);}finally{applyingCamera=false;}requestRender();},
   reducedMotion:motionPreference.matches,now:()=>performance.now(),requestFrame:requestAnimationFrame,cancelFrame:cancelAnimationFrame,
  });
+ // A canceled transition retains a pose between named endpoints. Persist its
+ // custom identity even when the user stops it without any later orbit change.
+ function interruptCameraMotion(){
+  if(!cameraMotion.cancel())return;
+  customCamera=true;viewName='custom';
+  clearTimeout(cameraTimer);
+  cameraTimer=setTimeout(()=>{
+   if(!disposed)options.onCamera?.({position:camera.position.toArray(),target:controls.target.toArray()},{custom:customCamera});
+  },350);
+ }
  listen(motionPreference,'change',event=>cameraMotion.setReducedMotion(event.matches));
- listen(controls,'start',()=>cameraMotion.cancel());
- listen(renderer.domElement,'wheel',()=>cameraMotion.cancel());
+ listen(controls,'start',interruptCameraMotion);
+ listen(renderer.domElement,'wheel',interruptCameraMotion);
  async function resize(){
-  const width=Math.max(1,host.clientWidth),height=Math.max(1,host.clientHeight),clear=options.getClearViewport?.()||null,compact=window.matchMedia('(max-width: 700px)').matches;
+  const width=Math.max(1,host.clientWidth),height=Math.max(1,host.clientHeight),clear=options.getClearViewport?.()||null,compact=window.matchMedia(COMPACT_LAYOUT_QUERY).matches;
   const ratio=choosePixelRatio({width,height,dpr:devicePixelRatio,quality,scale:adaptive.getScale()}),signature=JSON.stringify([width,height,ratio,clear,compact]);
   if(disposed||signature===layoutSignature)return;
   // Deduplicate the requested layout, not the last applied one: a quick B -> A
@@ -96,10 +98,24 @@ export async function createStudio(host,options={}){
    host.dataset.clearViewport=JSON.stringify(clear);requestRender();
   }catch(error){if(sequence===resizeSequence)layoutSignature='';throw error;}
  }
- const scheduler=owned.scheduler=createRenderScheduler({async draw(){if(inkTask)await inkTask;if(preview?.active)await preview.cancel();if(disposed||document.hidden)return;if(lightingDirty){await new Promise(requestAnimationFrame);if(disposed||document.hidden)return;lightingDirty=false;}const previous=[...camera.position.toArray(),...camera.quaternion.toArray(),...controls.target.toArray()];updatingControls=true;try{controls.update();floorCollision=constrainCameraToFloor(camera,controls.target)||floorCollision;if(floorCollision){restoreCameraPose(camera,controls,{position:camera.position.toArray(),target:controls.target.toArray()});floorCollision=false;}}finally{updatingControls=false;}const current=[...camera.position.toArray(),...camera.quaternion.toArray(),...controls.target.toArray()],changed=current.some((v,i)=>Math.abs(v-previous[i])>1e-8),now=performance.now(),scale=adaptive.getScale();adaptive.sample(lastFrameTime?now-lastFrameTime:0);lastFrameTime=now;if(scale!==adaptive.getScale()){renderer.setPixelRatio(choosePixelRatio({width:host.clientWidth,height:host.clientHeight,dpr:devicePixelRatio,quality,scale:adaptive.getScale()}));}renderer.toneMapping=lighting==='studio'?THREE.NeutralToneMapping:THREE.NoToneMapping;renderer.toneMappingExposure=1;gallery.updateView?.(camera,controls.target);renderer.render(scene,camera);host.dataset.frameCount=String(++frameCount);host.dataset.renderError='';stats();if(changed)scheduler.request();},async wait(){if(renderer.backend.isWebGPUBackend)await renderer.backend.device.queue.onSubmittedWorkDone();},onError(error){host.dataset.renderError=error.message;console.error('Render failed',error);options.onError?.(error);}});
- listen(controls,'change',()=>{if(disposed)return;floorCollision=constrainCameraToFloor(camera,controls.target)||floorCollision;if(updatingControls)return;requestRender();clearTimeout(cameraTimer);cameraTimer=setTimeout(()=>{if(!disposed)options.onCamera?.({position:camera.position.toArray(),target:controls.target.toArray()});},350);});
- listen(renderer.domElement,'keydown',event=>{if(disposed||document.activeElement!==renderer.domElement)return;cameraMotion.cancel();handleCameraKey(event,controls);});
- async function raytrace(){if(disposed)return;cameraMotion.finish();const cleanup=cancelPreview(),sequence=previewSequence;previewPending=true;let task;options.onPreview?.({phase:'loading',samples:0});try{await cleanup;await scheduler.flush();if(sequence!==previewSequence)return;if(!preview){if(!previewInitTask)previewInitTask=(async()=>{const {createPathPreview}=await import('./path-preview.js');if(disposed)return null;return owned.preview=await createPathPreview(renderer);})();const initializing=previewInitTask;try{preview=await initializing;}finally{if(previewInitTask===initializing)previewInitTask=null;}}if(inkTask)await inkTask;if(sequence!==previewSequence||disposed)return;previewPending=false;gallery.updateView?.(camera,controls.target);task=preview.start({scene,camera,bodyMesh:active.mesh,albedoMaterial:albedoSkin,roughnessMaterial:roughnessSkin,decals:[],environment:gallery.raw,onProgress:status=>{if(sequence===previewSequence)options.onPreview?.(status);}});previewTask=task;const result=await task;if(sequence===previewSequence){previewStill=true;options.onPreview?.({phase:'complete',...result});}return result;}catch(error){if(sequence===previewSequence){if(error.name!=='AbortError'){options.onPreview?.({phase:'error',message:error.message});console.error(error);}scheduler.request();}}finally{if(previewTask===task)previewTask=null;if(sequence===previewSequence)previewPending=false;}}
+ const scheduler=owned.scheduler=createRenderScheduler({async draw(){if(inkTask)await inkTask;if(previewController?.state.preview?.active)await previewController.state.preview.cancel();if(disposed||document.hidden)return;if(lightingDirty){await new Promise(requestAnimationFrame);if(disposed||document.hidden)return;lightingDirty=false;}const previous=[...camera.position.toArray(),...camera.quaternion.toArray(),...controls.target.toArray()];updatingControls=true;try{controls.update();floorCollision=constrainCameraToFloor(camera,controls.target)||floorCollision;if(floorCollision){restoreCameraPose(camera,controls,{position:camera.position.toArray(),target:controls.target.toArray()});floorCollision=false;}}finally{updatingControls=false;}const current=[...camera.position.toArray(),...camera.quaternion.toArray(),...controls.target.toArray()],changed=current.some((v,i)=>Math.abs(v-previous[i])>1e-8),now=performance.now(),scale=adaptive.getScale();adaptive.sample(lastFrameTime?now-lastFrameTime:0);lastFrameTime=now;if(scale!==adaptive.getScale()){renderer.setPixelRatio(choosePixelRatio({width:host.clientWidth,height:host.clientHeight,dpr:devicePixelRatio,quality,scale:adaptive.getScale()}));}renderer.toneMapping=lighting==='studio'?THREE.NeutralToneMapping:THREE.NoToneMapping;renderer.toneMappingExposure=1;gallery.updateView?.(camera,controls.target);renderer.render(scene,camera);host.dataset.frameCount=String(++frameCount);host.dataset.renderError='';stats();if(changed)scheduler.request();},async wait(){if(renderer.backend.isWebGPUBackend)await renderer.backend.device.queue.onSubmittedWorkDone();},onError(error){host.dataset.renderError=error.message;console.error('Render failed',error);options.onError?.(error);}});
+ listen(controls,'change',()=>{if(disposed)return;floorCollision=constrainCameraToFloor(camera,controls.target)||floorCollision;if(updatingControls)return;if(!applyingCamera){customCamera=true;viewName='custom';}requestRender();clearTimeout(cameraTimer);cameraTimer=setTimeout(()=>{if(!disposed)options.onCamera?.({position:camera.position.toArray(),target:controls.target.toArray()},{custom:customCamera});},350);});
+ listen(renderer.domElement,'keydown',event=>{if(disposed||document.activeElement!==renderer.domElement)return;interruptCameraMotion();handleCameraKey(event,controls);});
+ previewController=createPreviewOrchestrator({
+  isDisposed:()=>disposed,finishCamera:()=>cameraMotion.finish(),getInkTask:()=>inkTask,scheduler,
+  async createPreview(){
+   const {createPathPreview}=await import('./path-preview.js');
+   if(disposed)return null;
+   return owned.preview=await createPathPreview(renderer);
+  },
+  getTraceInput(){
+   gallery.updateView?.(camera,controls.target);
+   return {scene,camera,bodyMesh:active.mesh,albedoMaterial:albedoSkin,roughnessMaterial:roughnessSkin,decals:[],environment:gallery.raw,inkDetail:inkAtlas.detail};
+  },
+  onPreview:status=>options.onPreview?.(status),onError:error=>console.error(error),
+  capture:()=>renderer.domElement.toDataURL('image/png'),
+ });
+ function raytrace(){return previewController.raytrace();}
  function blendedLandmarks(body){const a=Math.min(100,Math.max(0,state.mass??50))/50,b=Math.min(100,Math.max(0,state.muscle??50))/50,x=Math.min(1,Math.floor(a)),y=Math.min(1,Math.floor(b)),u=a-x,v=b-y,cs=[y*3+x,y*3+x+1,(y+1)*3+x,(y+1)*3+x+1],ws=[(1-u)*(1-v),u*(1-v),(1-u)*v,u*v],result={L:{},R:{}};for(const side of ['L','R'])for(const joint of ['shoulder','elbow','wrist','hip','knee','ankle'])result[side][joint]=[0,1,2].map(k=>cs.reduce((sum,c,i)=>sum+body.endpoints[c].landmarks[side][joint][k]*ws[i],0));return result;}
  function deform(body){
   const landmarks=blendedLandmarks(body);
@@ -153,10 +169,10 @@ export async function createStudio(host,options={}){
  const authored=active.data.metadata.sourceTexture===true&&active.texture;
  const albedo=authored?skinSample:skinColor.mul(detail),studioAlbedo=authored?skinSample:skinColor.div(skinColor.mul(.75).add(1)).mul(studioDetail);
  const diffuse=normalWorld.dot(vec3(-.4,.7,.65).normalize()).max(0).mul(.35).add(normalWorld.dot(vec3(.6,.3,-.7).normalize()).max(0).mul(.1)).add(.55);
- inspectionSkin.colorNode=albedo.mul(diffuse).mul(inkTexture.rgb);
- skin.colorNode=studioAlbedo.mul(inkTexture.rgb);
+ inspectionSkin.colorNode=albedo.mul(diffuse).mul(inkColor);
+ skin.colorNode=studioAlbedo.mul(inkColor);
  albedoSkin.colorNode=skin.colorNode;
- referenceSkin.colorNode=(authored?albedo:skinColor).mul(inkTexture.rgb);
+ referenceSkin.colorNode=(authored?albedo:skinColor).mul(inkColor);
  // Source luminance adds restrained variation to the skin's broad highlight.
  skin.roughnessNode=luminance.clamp(.25,.7).sub(.42).mul(.2).add(.51);roughnessSkin.colorNode=vec3(skin.roughnessNode);
  const normalTexture=active.normalTexture||(catalog.id===LEGACY_MODEL_ID&&state.body==='male'?anatomyNormal:null);
@@ -178,33 +194,35 @@ export async function createStudio(host,options={}){
  for(const {t,index,map,signature,anchor} of pending){const patch=patches.get(t.id);removeDecal(t.id);const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(patch.positions,3));geometry.setAttribute('normal',new THREE.Float32BufferAttribute(patch.normals,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(patch.uvs,2));geometry.setAttribute('basePosition',new THREE.Float32BufferAttribute(patch.basePositions,3));geometry.setAttribute('clothingMask',new THREE.Float32BufferAttribute(patch.clothingMasks,1));geometry.setAttribute('torsoMask',new THREE.Float32BufferAttribute(patch.torsoMasks,1));geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(patch.indices),1));const p=geometry.attributes.position,n=geometry.attributes.normal;for(let i=0;i<p.count;i++)p.setXYZ(i,p.getX(i)+n.getX(i)*.00035,p.getY(i)+n.getY(i)*.00035,p.getZ(i)+n.getZ(i)*.00035);const mat=new THREE.MeshBasicNodeMaterial({map,toneMapped:false,transparent:true,opacity:t.opacity??.88,depthWrite:false,alphaTest:.01,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2,premultipliedAlpha:true,blending:THREE.MultiplyBlending});const bounds=uv().x.greaterThanEqual(0).and(uv().x.lessThanEqual(1)).and(uv().y.greaterThanEqual(0)).and(uv().y.lessThanEqual(1));const opacity=uniform(t.opacity??.88);mat.opacityNode=bounds.select(opacity,0);const mesh=new THREE.Mesh(geometry,mat);mesh.visible=false;mesh.renderOrder=10+index;mesh.userData.tattooId=t.id;scene.add(mesh);decals.set(t.id,{mesh,signature,anchor,opacity,sourceFaceIndices:patch.sourceFaceIndices,warnings:patch.warnings||[]});if(selected.has(t.id))lastAnchor=anchor;}
  // Ink modifies albedo before the skin is lit. Keep the source patches for
  // picking and UV mapping; they never form a second visible surface.
- const nextInkSignature=JSON.stringify([active.id,valid.map(t=>[t.id,decals.get(t.id)?.signature,t.opacity??.88])]);
+ const focusIds=valid.filter(t=>selected.has(t.id)).map(t=>t.id);
+ const nextInkSignature=JSON.stringify([active.id,valid.map(t=>[t.id,decals.get(t.id)?.signature,t.opacity??.88]),focusIds]);
  if(nextInkSignature!==inkSignature&&(valid.length||inkAtlas.texture)){
   await scheduler.flush();if(token!==version||disposed)return;
   // The stable texture changes before its GPU fence completes. Invalidate
   // now so an undo cannot mistake those in-flight pixels for the old bake.
   inkSignature='';
-  const task=inkAtlas.update({bodyGeometry:active.geometry,decals:valid.map(t=>decals.get(t.id)).filter(Boolean)});inkTask=task;
-  try{await task;if(token!==version||disposed)return;inkTexture.value=inkAtlas.texture;inkSignature=nextInkSignature;}
-  catch(error){inkTexture.value=whiteInk;inkSignature='';throw error;}
+  const task=inkAtlas.update({bodyGeometry:active.geometry,decals:valid.map(t=>decals.get(t.id)).filter(Boolean),focusDecals:focusIds.map(id=>decals.get(id)).filter(Boolean)});inkTask=task;
+  try{await task;if(token!==version||disposed)return;inkTexture.value=inkAtlas.texture;const detail=inkAtlas.detail;inkDetailEnabled.value=detail?1:0;inkDetailTexture.value=detail?.texture||whiteDetailInk;if(detail){inkDetailOffset.value.fromArray(detail.offset);inkDetailScale.value.fromArray(detail.scale);}inkSignature=nextInkSignature;}
+  catch(error){inkTexture.value=whiteInk;inkDetailEnabled.value=0;inkSignature='';throw error;}
   finally{if(inkTask===task)inkTask=null;}
  }
  if(token===version){requestRender();await scheduler.flush();if(token!==version)return;await library.trim(active.id);host.dataset.loadedBodies=String(bodies.length);host.dataset.updateMs=(performance.now()-updateStarted).toFixed(1);host.dataset.surfaceBackend=surface.backend;}}
  function view(name,{immediate=false}={}){
   if(disposed)return;
+  customCamera=false;viewName=name;
   let pose;
   if(['detail','arm','isolate'].includes(name)){
    const frame=anchorFrame(lastAnchor||decals.values().next().value?.anchor||getAnchor('leftUpperArm'));
    if(frame){const position=frame.point.clone().addScaledVector(frame.normal,.62);position.y+=.035;pose={target:frame.point.toArray(),position:position.toArray()};}
   }else{
-   const frame=cameraView(name,{stature:state.stature,compact:name==='body'&&window.matchMedia('(max-width: 700px)').matches});
+   const frame=cameraView(name,{stature:state.stature,compact:name==='body'&&window.matchMedia(COMPACT_LAYOUT_QUERY).matches});
    pose=frame;
   }
   if(pose)cameraMotion.start(pose,{immediate});
  }
- listen(renderer.domElement,'pointerdown',e=>{if(!disposed){cameraMotion.cancel();down=[e.clientX,e.clientY];}});listen(renderer.domElement,'pointerup',e=>{if(disposed||!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>5)return;const r=renderer.domElement.getBoundingClientRect();raycaster.setFromCamera(new THREE.Vector2((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1),camera);if(placing){const hit=raycaster.intersectObject(active.mesh)[0];if(hit){lastAnchor=fromHit(hit);options.onPlace?.(lastAnchor);}return;}const hit=raycaster.intersectObjects([...decals.values()].map(d=>d.mesh)).find(h=>h.uv&&h.uv.x>=0&&h.uv.x<=1&&h.uv.y>=0&&h.uv.y<=1);const bodyHit=raycaster.intersectObject(active.mesh)[0];if(hit&&(!bodyHit||hit.distance<=bodyHit.distance+.003)){lastAnchor=decals.get(hit.object.userData.tattooId).anchor;options.onSelect?.(hit.object.userData.tattooId,{additive:e.shiftKey||e.metaKey||e.ctrlKey});}});
+ listen(renderer.domElement,'pointerdown',e=>{if(!disposed){interruptCameraMotion();down=[e.clientX,e.clientY];}});listen(renderer.domElement,'pointerup',e=>{if(disposed||!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>5)return;const r=renderer.domElement.getBoundingClientRect();raycaster.setFromCamera(new THREE.Vector2((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1),camera);if(placing){const hit=raycaster.intersectObject(active.mesh)[0];if(hit){lastAnchor=fromHit(hit);options.onPlace?.(lastAnchor);}return;}const hit=raycaster.intersectObjects([...decals.values()].map(d=>d.mesh)).find(h=>h.uv&&h.uv.x>=0&&h.uv.x<=1&&h.uv.y>=0&&h.uv.y<=1);const bodyHit=raycaster.intersectObject(active.mesh)[0];if(hit&&(!bodyHit||hit.distance<=bodyHit.distance+.003)){lastAnchor=decals.get(hit.object.userData.tattooId).anchor;options.onSelect?.(hit.object.userData.tattooId,{additive:e.shiftKey||e.metaKey||e.ctrlKey});}});
  const observer=owned.observer=new ResizeObserver(resize);observer.observe(host);listen(document,'visibilitychange',requestRender);
  await update(state);view('body',{immediate:true});setLighting('studio');
- return {update,getAnchor,view,setLighting,raytrace,refreshLayout:resize,getCaptureRegion:()=>captureRegion?{...captureRegion}:null,cancelRaytrace(){cancelPreview();scheduler.request();},setQuality(value){quality=['auto','efficient','high'].includes(value)?value:'auto';adaptive=createAdaptiveQuality({quality});resize();},getMeasurements:()=>({...measurements}),setPlaceMode(v){placing=v;renderer.domElement.style.cursor=v?'crosshair':'grab';},async snapshot(){cameraMotion.finish();if(previewTask)await previewTask.catch(()=>{});if(!previewStill)await scheduler.flush();return renderer.domElement.toDataURL('image/png');},getCamera(){return {position:camera.position.toArray(),target:controls.target.toArray()};},restoreCamera(v){cameraMotion.cancel();if(restoreCameraPose(camera,controls,v))requestRender();},renderer,dispose};
+ return {update,getAnchor,view,setLighting,raytrace,getMappingWarnings,getViewName:()=>viewName,refreshLayout:resize,getCaptureRegion:()=>captureRegion?{...captureRegion}:null,cancelRaytrace(){cancelPreview();scheduler.request();},setQuality(value){quality=['auto','efficient','high'].includes(value)?value:'auto';adaptive=createAdaptiveQuality({quality});return resize();},getMeasurements:()=>({...measurements}),setPlaceMode(v){placing=v;renderer.domElement.style.cursor=v?'crosshair':'grab';},snapshot:()=>previewController.snapshot(),getCamera(){return {position:camera.position.toArray(),target:controls.target.toArray()};},restoreCamera(v){cameraMotion.cancel();customCamera=true;viewName='custom';applyingCamera=true;try{if(restoreCameraPose(camera,controls,v))requestRender();}finally{applyingCamera=false;}},renderer,dispose};
  }catch(error){await dispose();throw error;}
 }

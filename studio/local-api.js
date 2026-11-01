@@ -16,7 +16,7 @@ function storageError(error) {
 }
 
 /**
- * Device-local workspace operations through api(path, method, body).
+ * Device-local implementation of the private server's api(path, method, body).
  * No network or localStorage fallback: a successful write means IndexedDB committed.
  * Pass browser.decodeImage(blob) only in tests; production uses the native decoder.
  */
@@ -67,7 +67,7 @@ export function createLocalApi({indexedDB = globalThis.indexedDB, name = 'inkfor
     return databasePromise;
   }
 
-  async function transaction(mode, work) {
+  async function transaction(mode, work, catalogId) {
     const db = await open();
     ensureOpen();
     return new Promise((resolve,reject) => {
@@ -80,18 +80,20 @@ export function createLocalApi({indexedDB = globalThis.indexedDB, name = 'inkfor
       tx.onerror = () => {};
       const stores = {workspace:tx.objectStore('workspace'), assets:tx.objectStore('assets')};
       const stateRequest = stores.workspace.get(WORKSPACE_KEY), assetsRequest = stores.assets.getAll();
+      const catalogRequest = catalogId ? stores.workspace.get('catalog:' + catalogId) : null;
       let ready = 0;
       const run = () => {
-        if (++ready !== 2) return;
+        if (++ready !== (catalogRequest ? 3 : 2)) return;
         try {
           const state = stateRequest.result;
           if (!state || !Number.isSafeInteger(state.revision) || !Array.isArray(state.projects)) throw errorWithStatus('Workspace storage is not recognized. Saved data has been preserved; export it using the original Inkform version.',503);
           const assets = assetsRequest.result.sort((a,b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
-          result = work(state,assets,stores);
+          result = work(state,assets,stores,catalogRequest?.result);
         } catch (error) {failure = error; tx.abort();}
       };
       stateRequest.onsuccess = run;
       assetsRequest.onsuccess = run;
+      if (catalogRequest) catalogRequest.onsuccess = run;
     });
   }
 
@@ -152,28 +154,67 @@ export function createLocalApi({indexedDB = globalThis.indexedDB, name = 'inkfor
         const raw = await transaction('readonly',(state,assets) => snapshot(state,assets));
         return path === 'backup' ? await backup(raw) : present(raw);
       }
+      if (path.startsWith('catalog/') && ['GET','POST'].includes(method)) {
+        const id = path.slice(8);
+        if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw errorWithStatus('Invalid personal catalog id',400);
+        if (method === 'GET') return transaction('readonly', (state,assets,stores,marker) => ({applied:marker?.applied === true}),id);
+        if (!Array.isArray(value?.projectIds) || !value.projectIds.length || value.projectIds.length > STORAGE_LIMITS.maxProjects || value.projectIds.some(projectId => typeof projectId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(projectId)) || new Set(value.projectIds).size !== value.projectIds.length) throw errorWithStatus('Personal catalog requires unique project ids',400);
+        if (jsonBytes(value) > STORAGE_LIMITS.maxRestoreBytes) throw errorWithStatus('Workspace import exceeds the 160 MiB restore envelope.',413);
+        const imported = await validateBackup(value.backup,{browser});
+        const selected = new Set(value.projectIds);
+        if (value.projectIds.some(projectId => !imported.projects.some(project => project.id === projectId))) throw errorWithStatus('Personal catalog project is missing from its seed',400);
+        const raw = await transaction('readwrite',(state,assets,stores,marker) => {
+          // The marker and additions commit together. Competing tabs recheck it
+          // after image decoding, against the latest committed user work.
+          if (marker?.applied === true) return snapshot(state,assets);
+          const pristine = state.revision === 0 && !state.projects.length && !assets.length;
+          const existingIds = new Set(state.projects.map(project => project.id));
+          const additions = imported.projects.filter(project => pristine || (selected.has(project.id) && !existingIds.has(project.id)));
+          const references = new Set(assetReferences(additions));
+          const assetIds = new Set(assets.map(asset => asset.id));
+          const addedAssets = imported.assets.filter(asset => !assetIds.has(asset.id) && (pristine || references.has(asset.id))).map(asset => ({...asset,token:uuid()}));
+          const nextAssets = [...assets,...addedAssets];
+          const next = validateWorkspace({projects:[...state.projects,...additions],activeProjectId:pristine ? imported.activeProjectId : state.activeProjectId},new Set(nextAssets.map(asset => asset.id)));
+          validateStorageTotals(nextAssets);
+          // Existing artwork wins an id collision, including its exact bytes,
+          // metadata and Blob URL. Never clear either object store here.
+          for (const asset of addedAssets) stores.assets.add(asset);
+          const nextState = {...state,...next,revision:state.revision + 1};
+          stores.workspace.put(nextState);
+          // A separate row also survives saves from an older already-open tab.
+          stores.workspace.put({id:'catalog:' + id,applied:true});
+          return snapshot(nextState,nextAssets);
+        },id);
+        return present(raw);
+      }
       if (method === 'POST' && path === 'assets') {
         const asset = {...await validateAsset(value,{browser}),token:uuid()};
-        await transaction('readwrite',(state,assets,stores) => {
+        const revision = await transaction('readwrite',(state,assets,stores) => {
+          if (value.revision !== undefined) checkRevision(value,state,assets);
           validateStorageTotals([...assets,asset]);
           // Existing oversized states remain readable/exportable; additions
           // must fit the same portable-state budget as workspace saves.
           validateWorkspace(state,new Set(assets.map(asset => asset.id)));
           stores.assets.add(asset);
+          stores.workspace.put({...state,revision:state.revision + 1});
+          return state.revision + 1;
         });
-        return assetMetadata(asset);
+        return {...assetMetadata(asset),revision};
       }
       if (method === 'DELETE' && path.startsWith('assets/')) {
         const id = path.slice(7);
         if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw errorWithStatus('Invalid asset id',400);
-        await transaction('readwrite',(state,assets,stores) => {
+        const revision = await transaction('readwrite',(state,assets,stores) => {
+          if (value?.revision !== undefined) checkRevision(value,state,assets);
           if (!assets.some(asset => asset.id === id)) throw errorWithStatus('Asset not found',404);
           if ([...assetReferences(state.projects)].includes(id)) throw errorWithStatus('Asset is referenced by a project',409);
           stores.assets.delete(id);
+          stores.workspace.put({...state,revision:state.revision + 1});
+          return state.revision + 1;
         });
         for (const [url,asset] of versions) if (asset.id === id) {URL.revokeObjectURL(url); versions.delete(url);}
         urls.delete(id);
-        return {deleted:id};
+        return {deleted:id,revision};
       }
       if ((method === 'PUT' && path === 'workspace') || (method === 'POST' && path === 'restore')) {
         if (value === null || typeof value !== 'object' || Array.isArray(value)) throw errorWithStatus('Request must be an object',400);
@@ -185,6 +226,9 @@ export function createLocalApi({indexedDB = globalThis.indexedDB, name = 'inkfor
         }
         const raw = await transaction('readwrite',(state,assets,stores) => {
           checkRevision(value,state,assets);
+          if (imported && value.onlyIfEmpty === true && (state.revision !== 0 || state.projects.length || assets.length)) {
+            throw errorWithStatus('Workspace already contains saved work',409);
+          }
           const nextAssets = imported ? imported.assets : assets;
           const next = imported || validateWorkspace(value,new Set(assets.map(asset => asset.id)));
           validateStorageTotals(nextAssets);

@@ -28,9 +28,12 @@ export function createWorkspaceFiles(state, services) {
         try {
           say('Importing ' + file.name + '…');
           const image = await raster(file);
-          const asset = await api('assets', 'POST', {
-            name: file.name.replace(/\.[^.]+$/, '').slice(0, 120), ...image,
+          if (!await flush()) throw Error('Save or resolve the open changes before importing artwork.');
+          const result = await api('assets', 'POST', {
+            revision: state.workspace.revision, name: file.name.replace(/\.[^.]+$/, '').slice(0, 120), ...image,
           });
+          const {revision, ...asset} = result;
+          if (Number.isSafeInteger(revision)) state.workspace.revision = revision;
           state.workspace.assets.push(asset);
           imported++;
           if (active().tattoos.length < MAX_TATTOOS && mutate(study => {
@@ -71,7 +74,8 @@ export function createWorkspaceFiles(state, services) {
       }
       if (!await flush()) throw Error('Save the workspace before deleting artwork.');
       if (!confirm('Remove this artwork from your library? Export a workspace backup first if you want to keep it.')) return;
-      await api('assets/' + id, 'DELETE');
+      const result = await api('assets/' + id, 'DELETE', {revision: state.workspace.revision});
+      if (Number.isSafeInteger(result?.revision)) state.workspace.revision = result.revision;
       state.workspace.assets = state.workspace.assets.filter(asset => asset.id !== id);
       invalidateArtworkHistory(id);
       publish();
@@ -115,6 +119,7 @@ export function createWorkspaceFiles(state, services) {
         throw Error('Preview could not be rendered. Adjust the study or reload before exporting.');
       }
       const study = copy(active());
+      const capture = {view: state.studio.getViewName?.() || state.currentView || 'custom', mappingWarnings: copy(state.mappingWarnings || [])};
       const image = new browser.Image();
       image.src = await state.studio.snapshot();
       const captureRegion = state.studio.getCaptureRegion?.();
@@ -125,7 +130,7 @@ export function createWorkspaceFiles(state, services) {
       const context = canvas.getContext('2d');
       canvas.width = Math.max(640, crop.width);
       context.font = '14px Helvetica Neue, Helvetica, Arial, sans-serif';
-      const lines = referenceLines(study, regions, text => context.measureText(text).width, canvas.width - 40);
+      const lines = referenceLines(study, regions, text => context.measureText(text).width, canvas.width - 40, capture);
       canvas.height = crop.height + 40 + lines.length * 22;
       context.fillStyle = '#262928';
       context.fillRect(0, 0, canvas.width, canvas.height);
@@ -135,8 +140,8 @@ export function createWorkspaceFiles(state, services) {
       lines.forEach((line, index) => context.fillText(line, 20, crop.height + 30 + index * 22));
       const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
       if (!blob) throw Error('The reference image could not be created. Try again.');
-      download('inkform-' + study.name.replace(/[^a-z0-9]/gi, '-') + '.png', blob);
-      say('Reference downloaded with visible tattoos, approximate widths and artist notes. Save another view for artwork that wraps.');
+      download('inkform-' + study.name.replace(/[^a-z0-9]/gi, '-') + '-' + (capture.view === 'custom' ? 'custom-view' : capture.view).replace(/[^a-z0-9]/gi, '-') + '.png', blob);
+      say('Reference download started. Open the PNG to check it; save another view for wrapping artwork.');
     } finally {
       setInteractionBlocked(false);
     }

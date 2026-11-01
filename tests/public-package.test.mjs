@@ -6,6 +6,7 @@ import {join, dirname, resolve} from 'node:path';
 import {test} from 'node:test';
 
 const root = resolve(import.meta.dirname, '..');
+const publishedLanding = html => html.includes('href="/studio/"') && html.includes('href="/site.css"');
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 async function files(directory, prefix = '') {
   return (await Promise.all((await readdir(directory, {withFileTypes:true})).map(async entry => {
@@ -81,7 +82,9 @@ test('CSP hashes the actual import map and permits renderer capabilities without
   assert.ok(headers.includes('Referrer-Policy: no-referrer'));
   assert.ok(html.includes('./public-app.js'));
   assert.ok(!html.includes('src="./app.js'));
-  assert.match(await readFile(join(options.outputDir, '_redirects'), 'utf8'), /^\/\s+\/studio\/\s+302/m);
+  assert.doesNotMatch(await readFile(join(options.outputDir, '_redirects'), 'utf8'), /^\/\s+/m);
+  assert.match(await readFile(join(options.outputDir, 'index.html'), 'utf8'), /try it before you buy it/);
+  assert.ok(publishedLanding(await readFile(join(options.outputDir, 'index.html'), 'utf8')));
 });
 
 test('missing files, symlinked files, and oversized assets fail before replacing the previous artifact', async t => {

@@ -1,0 +1,82 @@
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('/studio/fonts/IBMPlexSans-variable.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: light;
+  --background: #dedfd9;
+  --paper: #f2f2ec;
+  --ink: #232720;
+  --muted: #60675b;
+  --line: #b0b5ab;
+  --accent: #e65e27;
+  --focus: #276783;
+  font-family: 'IBM Plex Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  color: var(--ink);
+  background: var(--background);
+  font-synthesis: none;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: .2em; }
+a:hover { text-decoration-thickness: 2px; }
+a:focus-visible { outline: 3px solid var(--focus); outline-offset: 5px; border-radius: 2px; }
+p { margin: 0 0 1.2em; }
+p:last-child { margin-bottom: 0; }
+
+.skip-link { position: absolute; top: 12px; left: 12px; padding: 12px 18px; background: var(--paper); z-index: 1; transform: translateY(-180%); }
+.skip-link:focus { transform: translateY(0); }
+.site-shell { max-width: 1440px; margin: 0 auto; padding: 0 64px; }
+.site-header { min-height: 100px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--line); }
+.site-description { font-size: 16px; }
+.site-header nav { display: flex; gap: 28px; align-items: center; font-size: 15px; }
+.site-header nav a { min-height: 44px; display: inline-flex; align-items: center; }
+.home-link { font-size: 28px; font-weight: 600; letter-spacing: -.05em; text-decoration: none; }
+
+.hero { padding: 68px 0 76px; }
+.hero h1 { margin: 0; font-size: clamp(72px, 12.3vw, 164px); line-height: 1; letter-spacing: -.075em; font-weight: 600; }
+.tagline { text-wrap: balance; margin: 20px 0 34px; font-size: clamp(26px, 3.8vw, 48px); line-height: 1.2; letter-spacing: -.035em; }
+.studio-button { display: inline-flex; align-items: center; justify-content: center; min-height: 54px; padding: 12px 26px; border: 1px solid var(--ink); border-radius: 4px; background: var(--ink); color: var(--paper); box-shadow: inset 4px 0 0 var(--accent); font-size: 17px; font-weight: 500; text-decoration: none; }
+.studio-button:hover { background: #41483a; text-decoration: none; }
+.about { scroll-margin-top: 24px; }
+.information-row { display: grid; grid-template-columns: minmax(190px, 1fr) minmax(0, 2fr); gap: 48px; padding: 38px 0 44px; border-top: 1px solid var(--line); }
+.information-row h2 { margin: 0; font-size: 28px; line-height: 1.25; font-weight: 500; letter-spacing: -.035em; }
+.section-copy { max-width: 66ch; font-size: 18px; line-height: 1.65; }
+.contact-row { padding-bottom: 58px; }
+.contact-row .section-copy { font-size: 22px; line-height: 1.5; overflow-wrap: anywhere; }
+.site-footer { min-height: 88px; padding: 22px 0; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+.site-footer a { display: inline-flex; align-items: center; min-height: 44px; }
+
+.privacy-page { max-width: 800px; padding: 64px 0 70px; }
+.privacy-page h1 { margin: 0 0 48px; font-size: clamp(38px, 6vw, 64px); line-height: 1.08; letter-spacing: -.05em; font-weight: 600; }
+.privacy-page section + section { margin-top: 38px; }
+.privacy-page h2 { margin: 0 0 14px; font-size: 25px; line-height: 1.3; letter-spacing: -.025em; font-weight: 500; }
+.privacy-page p { max-width: 66ch; font-size: 18px; line-height: 1.65; }
+
+@media (max-width: 900px) {
+  .site-shell { padding: 0 32px; }
+  .information-row { grid-template-columns: minmax(160px, 1fr) minmax(0, 2fr); gap: 28px; }
+}
+
+@media (max-width: 600px) {
+  .site-shell { padding: 0 22px; }
+  .site-header { min-height: 84px; gap: 14px; }
+  .site-description { max-width: 130px; font-size: 14px; line-height: 1.4; }
+  .site-header nav { gap: 14px; font-size: 13px; }
+  .site-header nav a { max-width: 104px; }
+  .hero { padding: 56px 0 52px; }
+  .hero h1 { font-size: clamp(62px, 16.5vw, 98px); }
+  .tagline { max-width: 14ch; margin: 18px 0 28px; font-size: 32px; line-height: 1.13; }
+  .information-row { grid-template-columns: minmax(0, 1fr); gap: 22px; padding: 30px 0 36px; }
+  .information-row h2 { font-size: 26px; }
+  .section-copy, .privacy-page p { font-size: 17px; line-height: 1.65; }
+  .contact-row .section-copy { font-size: 19px; }
+  .privacy-page { padding: 44px 0 52px; }
+  .privacy-page h1 { margin-bottom: 34px; }
+  .privacy-page h2 { font-size: 23px; }
+}

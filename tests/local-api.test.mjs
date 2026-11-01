@@ -11,12 +11,12 @@ function fixture(indexedDB = new IDBFactory(), name = 'test') {
  const browser = {decodeImage: async () => ({width: 1,height:1}), URL:{createObjectURL(blob){const url='blob:test-'+created.length;created.push({url,blob});return url;},revokeObjectURL(url){revoked.push(url);}}};
  const api=createLocalApi({indexedDB,name,browser});return {api,created,revoked,indexedDB,browser};
 }
-const save = (api, p, revision=0) => api('workspace','PUT',{revision,projects:[p],activeProjectId:p.id});
+const save = async (api, p, revision) => api('workspace','PUT',{revision:revision ?? (await api('workspace')).revision,projects:[p],activeProjectId:p.id});
 
 test('new device is empty, save commits and reopening preserves workspace and artwork', async () => {
  const f=fixture(); assert.deepEqual(await f.api('workspace'),{version:3,revision:0,projects:[],activeProjectId:null,assets:[]});
  const asset=await f.api('assets','POST',image()); const p=project('Saved');addTattoo(p,asset);
- const result=await save(f.api,p);assert.equal(result.revision,1); assert.equal(result.assets[0].url,asset.url);
+ const result=await save(f.api,p);assert.equal(result.revision,2); assert.equal(result.assets[0].url,asset.url);
  await f.api.close();assert.deepEqual(f.revoked,[asset.url]);
  const reopened=fixture(f.indexedDB); const current=await reopened.api('workspace'); assert.equal(current.projects[0].name,'Saved');assert.equal(current.assets[0].mime,'image/png');assert.equal(reopened.created[0].blob.size,68);
  await reopened.api.close();
@@ -26,7 +26,7 @@ test('version 3 export imports into a clean database, preserving metadata and by
  const f=fixture(); const asset=await f.api('assets','POST',image({legacyWhite:true}));const p=project('Portable');addTattoo(p,asset);await save(f.api,p);
  const backup=await f.api('backup');assert.equal(backup.assets[0].dataUrl,PNG);assert.equal(backup.assets[0].url,undefined);
  backup.assets[0].url='https://example.invalid/untrusted'; const next=fixture(new IDBFactory());const result=await next.api('restore','POST',{revision:0,backup});
- assert.equal(result.revision,1);assert.match(result.assets[0].url,/^blob:/); const roundtrip=await next.api('backup');assert.deepEqual(roundtrip,backupWithoutUrl(backup));
+ assert.equal(result.revision,1);assert.match(result.assets[0].url,/^blob:/); const roundtrip=await next.api('backup');assert.deepEqual({...roundtrip,revision:backup.revision},backupWithoutUrl(backup));
  await f.api.close();await next.api.close();
 });
 function backupWithoutUrl(value){const copy=structuredClone(value);for(const a of copy.assets)delete a.url;return copy;}
@@ -47,7 +47,7 @@ test('malformed imports and missing references leave saved state and blob URLs u
 test('referenced artwork cannot be removed, successful replacement revokes old URLs after commit',async()=>{
  const f=fixture(),asset=await f.api('assets','POST',image());const p=project();addTattoo(p,asset);await save(f.api,p);
  await assert.rejects(f.api('assets/'+asset.id,'DELETE'),e=>e.status===409);
- const backup={version:3,projects:[],activeProjectId:null,assets:[]};await f.api('restore','POST',{revision:1,backup});assert.deepEqual(f.revoked,[asset.url]);assert.equal((await f.api('workspace')).revision,2);
+ const backup={version:3,projects:[],activeProjectId:null,assets:[]};await f.api('restore','POST',{revision:2,backup});assert.deepEqual(f.revoked,[asset.url]);assert.equal((await f.api('workspace')).revision,3);
  await assert.rejects(f.api('assets/'+asset.id,'DELETE'),e=>e.status===404);await f.api.close();
 });
 
@@ -89,7 +89,7 @@ test('500-asset acceptance limit preserves existing oversized storage for readin
 
 test('tab reload reconciles remotely restored artwork URL tokens even if IDs and metadata match',async()=>{
  const db=new IDBFactory(),a=fixture(db),b=fixture(db);const original=await a.api('assets','POST',image());const backup=await a.api('backup');
- await b.api('restore','POST',{revision:0,backup});assert.deepEqual(a.revoked,[]);
+ await b.api('restore','POST',{revision:backup.revision,backup});assert.deepEqual(a.revoked,[]);
  const latest=await a.api('workspace');assert.notEqual(latest.assets[0].url,original.url);assert.deepEqual(a.revoked,[]);await a.api.close();assert.equal(a.revoked.length,2);await b.api.close();
 });
 
@@ -114,17 +114,36 @@ test('a newer database schema fails safely without deleting or migrating its con
 
 test('open workspace exports its original artwork after another tab restores an empty workspace',async()=>{
  const db=new IDBFactory(),a=fixture(db),b=fixture(db);const asset=await a.api('assets','POST',image());const p=project('Open edits');addTattoo(p,asset);const captured=await save(a.api,p);
- await b.api('restore','POST',{revision:1,backup:{version:3,projects:[],activeProjectId:null,assets:[]}});
+ await b.api('restore','POST',{revision:2,backup:{version:3,projects:[],activeProjectId:null,assets:[]}});
  await assert.rejects(save(a.api,p,1),e=>e.status===409);await a.api('workspace'); // workspace-sync conflict refresh
  assert.deepEqual(a.revoked,[]);captured.projects[0].notes='Unsaved open edits';
- const exported=await a.api.exportWorkspace(captured);assert.equal(exported.assets[0].dataUrl,PNG);assert.equal(exported.projects[0].notes,'Unsaved open edits');assert.equal(exported.revision,1);
+ const exported=await a.api.exportWorkspace(captured);assert.equal(exported.assets[0].dataUrl,PNG);assert.equal(exported.projects[0].notes,'Unsaved open edits');assert.equal(exported.revision,2);
  await a.api.close();await b.api.close();
 });
 
 test('captured URL version exports original bytes when another tab replaces the same artwork ID',async()=>{
  const replacement='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNg+A8AAQIBAEK+vGgAAAAASUVORK5CYII=';
  const db=new IDBFactory(),a=fixture(db),b=fixture(db);const asset=await a.api('assets','POST',image());const p=project();addTattoo(p,asset);const captured=await save(a.api,p);const backup=await b.api('backup');backup.assets[0].dataUrl=replacement;
- await b.api('restore','POST',{revision:1,backup});const latest=await a.api('workspace');assert.notEqual(latest.assets[0].url,asset.url);assert.deepEqual(a.revoked,[]);
+ await b.api('restore','POST',{revision:2,backup});const latest=await a.api('workspace');assert.notEqual(latest.assets[0].url,asset.url);assert.deepEqual(a.revoked,[]);
  assert.equal((await a.api.exportWorkspace(captured)).assets[0].dataUrl,PNG);assert.equal((await a.api.exportWorkspace(latest)).assets[0].dataUrl,replacement);
  await a.api.close();assert.equal(a.revoked.length,2);await b.api.close();
+});
+
+test('artwork mutations advance restore freshness and return an adoptable save revision',async()=>{
+ const db=new IDBFactory(),a=fixture(db),b=fixture(db); const before=await a.api('backup');
+ const asset=await b.api('assets','POST',image()); assert.equal(asset.revision,1);
+ await assert.rejects(a.api('restore','POST',{revision:0,backup:before}),e=>e.status===409);
+ assert.equal((await b.api('backup')).assets[0].dataUrl,PNG);
+ const saved=await save(b.api,project('Import owner'),asset.revision); assert.equal(saved.revision,2);
+ const removed=await b.api('assets/'+asset.id,'DELETE'); assert.equal(removed.revision,3);
+ await assert.rejects(a.api('restore','POST',{revision:2,backup:before}),e=>e.status===409);
+ await save(b.api,saved.projects[0],removed.revision); await a.api.close();await b.api.close();
+});
+
+test('stale import and deletion preconditions preserve all existing artwork bytes',async()=>{
+ const f=fixture(), first=await f.api('assets','POST',image({revision:0}));
+ await assert.rejects(f.api('assets','POST',image({revision:0})),e=>e.status===409);
+ await assert.rejects(f.api('assets/'+first.id,'DELETE',{revision:0}),e=>e.status===409);
+ const current=await f.api('backup');assert.equal(current.revision,1);assert.equal(current.assets.length,1);assert.equal(current.assets[0].dataUrl,PNG);
+ await f.api.close();
 });

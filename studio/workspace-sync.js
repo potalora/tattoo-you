@@ -5,8 +5,13 @@ export function createWorkspaceSync(state, {
   copy = value => globalThis.structuredClone(value),
   savedStatus = () => {},
   say = () => {},
+  saveFailed = say,
+  saveRecovered = () => {},
+  persistenceChanged = () => {},
   setRetry = () => {},
   setRenderBusy = () => {},
+  setPreviewError = () => {},
+  renderedComposition = () => {},
   // Browser timer methods require their Window receiver. Keep native calls
   // behind wrappers so an injected clock object never becomes that receiver.
   clock = {
@@ -35,8 +40,6 @@ export function createWorkspaceSync(state, {
         try {
           const result = await api('workspace', 'PUT', payload);
           state.workspace.revision = result.revision;
-          savedStatus('Saved to workspace');
-          setRetry({hidden: true});
         } catch (error) {
           state.dirty = true;
           if (error.status === 409) {
@@ -51,15 +54,14 @@ export function createWorkspaceSync(state, {
               state.workspace.revision = latest.revision;
               state.dirty = JSON.stringify(state.workspace.projects) !== JSON.stringify(payload.projects)
                 || state.workspace.activeProjectId !== payload.activeProjectId;
-              if (!state.dirty) savedStatus('Saved to workspace');
               continue;
             }
             state.conflict = true;
             savedStatus('Changed in another tab', true);
-            say('Another tab saved this workspace. Export your open edits before reloading the saved copy.');
+            saveFailed('Another tab saved this workspace. Export your open edits before reloading the saved copy.');
           } else {
             savedStatus('Not saved · retry', true);
-            say(error.message);
+            saveFailed(error.message);
           }
           setRetry(state.conflict ? {hidden: false, text: 'Resolve conflict'} : {hidden: false});
           break;
@@ -70,7 +72,7 @@ export function createWorkspaceSync(state, {
       state.dirty = true;
       setRetry({hidden: false});
       savedStatus('Not saved · retry', true);
-      say(error.message);
+      saveFailed(error.message);
       return false;
     }
   }
@@ -85,6 +87,14 @@ export function createWorkspaceSync(state, {
     state.saveTask = savePending().finally(() => {
       state.saving = false;
       state.saveTask = null;
+      // Acknowledging one payload is insufficient if later edits are queued.
+      // Publish durable success only once every pending edit has persisted.
+      if (!state.dirty && !state.conflict) {
+        savedStatus('Saved to workspace');
+        setRetry({hidden: true});
+        saveRecovered();
+      }
+      persistenceChanged();
     });
     return state.saveTask;
   }
@@ -96,12 +106,15 @@ export function createWorkspaceSync(state, {
         const active = state.workspace.projects.find(project => project.id === state.workspace.activeProjectId);
         const project = copy(active);
         await state.studio.update(project.body, project.tattoos, state.workspace.assets, project.selectedIds);
+        if (!state.renderAgain) renderedComposition(project);
       }
       state.lastRenderOK = true;
+      setPreviewError('');
       return true;
     } catch (error) {
       console.error(error);
-      say('Preview error: ' + error.message);
+      setPreviewError(error.message);
+      say('Preview unavailable. Change the view to retry.');
       return false;
     }
   }

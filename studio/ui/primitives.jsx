@@ -1,6 +1,6 @@
 // Adapted from shadcn/ui base-nova Button and Dialog (MIT).
 // Inkform owns the glass theme; Base UI owns keyboard and dialog behavior.
-import React, {createContext, useContext, useState} from 'react';
+import React, {createContext, useContext, useEffect, useRef, useState} from 'react';
 import {AnimatePresence, motion} from 'motion/react';
 import {Button as ButtonPrimitive} from '@base-ui/react/button';
 import {Dialog as DialogPrimitive} from '@base-ui/react/dialog';
@@ -64,12 +64,51 @@ export function closeMenuThen(event, action) {
   menu?.querySelector(':scope > summary')?.focus();
   return action();
 }
-export function RangeControl({id, label, value, min, max, step, disabled, format = String, onChange, onCommit}) {
+/** Numeric text stays local until a valid blur/Enter; no invalid draft reaches history. */
+export function commitNumericDraft(draft, {min, max, step, value, onChange, onCommit}) {
+  const number = Number(draft);
+  if (String(draft).trim() && Number.isFinite(number) && number === value) return {ok: true, value};
+  const ticks = (number - Number(min)) / Number(step);
+  if (!String(draft).trim() || !Number.isFinite(number) || number < min || number > max || Math.abs(ticks - Math.round(ticks)) > 1e-7) {
+    return {ok: false, message: `Use a value from ${min} to ${max}, in steps of ${step}.`};
+  }
+  if (number !== value) { onChange(number); onCommit?.(); }
+  return {ok: true, value: number};
+}
+export function RangeControl({id, label, value, min, max, step, disabled, format = String, numberScale = 1, onChange, onCommit}) {
+  const numberValue = Number((value * numberScale).toPrecision(12));
+  const [draft, setDraft] = useState(String(numberValue)), [error, setError] = useState('');
+  const editing = useRef(false), cancel = useRef(false);
+  useEffect(() => { if (!editing.current) setDraft(String(numberValue)); }, [numberValue]);
+  const commit = () => {
+    editing.current = false;
+    if (cancel.current) { cancel.current = false; return; }
+    const result = commitNumericDraft(draft, {min: min * numberScale, max: max * numberScale, step: step * numberScale, value: numberValue, onChange: next => onChange(next / numberScale), onCommit});
+    setError(result.ok ? '' : result.message);
+    setDraft(String(result.ok ? result.value : numberValue));
+  };
+  const units = format(value).replace(/^[+−-]?[\d.]+\s*/, '');
   return <div className="range-control">
-    <label htmlFor={id}>{label}</label><output id={`${id}-value`} htmlFor={id}>{format(value)}</output>
+    <label htmlFor={id}>{label}</label>
+    <div className="range-exact"><input id={`${id}-number`} type="number" value={draft} min={min * numberScale} max={max * numberScale} step={step * numberScale}
+      disabled={disabled} aria-label={`${label} exact value`} aria-describedby={error ? `${id}-error` : undefined} aria-invalid={!!error}
+      onFocus={() => { editing.current = true; }} onChange={event => { setDraft(event.target.value); setError(''); }}
+      onBlur={commit} onKeyDown={event => {
+        if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); }
+        if (event.key === 'Escape') { event.preventDefault(); cancel.current = true; setDraft(String(numberValue)); setError(''); event.currentTarget.blur(); }
+      }} /><span aria-hidden="true">{units}</span></div>
     <input id={id} type="range" value={value} min={min} max={max} step={step} disabled={disabled} aria-valuetext={format(value)}
       onChange={event => onChange(Number(event.target.value))} onBlur={onCommit} onPointerUp={onCommit} onKeyUp={onCommit} />
+    {error && <p id={`${id}-error`} className="range-error" role="status">{error} Previous value restored.</p>}
   </div>;
+}
+
+export function PreparedCompositionGuidance({app, snapshot}) {
+  if (snapshot.runtimeCapabilities?.preparedComposition?.projectId !== snapshot.study?.id) return null;
+  return <aside className="prepared-composition-note" aria-label="Prepared composition">
+    <p>These designs were aligned to this body and existing tattoos. Body or placement changes can break the behind effect. Save an alternative before adjusting. It preserves the original; prepared masks still need review after changes.</p>
+    <Button disabled={snapshot.ui.blocked} onClick={app.actions.saveAlternative}>Save alternative…</Button>
+  </aside>;
 }
 
 const DialogOpenContext = createContext(false);

@@ -48,7 +48,11 @@
         "studio/ui-app.css",
         "studio/studio.css",
         "studio/themes.css",
-        "studio/theme.js"
+        "studio/theme.js",
+        "studio/preview-orchestrator.js",
+        "studio/renderer-lifecycle.js",
+        "studio/instrument.css",
+        "studio/instrument-controls.css"
       ]
     },
     {
@@ -95,6 +99,10 @@
         {
           "source": "LICENSE",
           "path": "LICENSE"
+        },
+        {
+          "source": "public/site.css",
+          "path": "site.css"
         }
       ]
     },

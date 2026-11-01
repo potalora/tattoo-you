@@ -4,7 +4,7 @@ import {bodyParams} from '../body-controls.js';
 import {BODY_PROFILES, bodyProfileId} from '../body-profiles.js';
 import {resolveBodyModel, SELECTABLE_BODY_MODELS} from '../model-catalog.js';
 import {SKIN_TONES, LEGACY_SKIN_COLORS, skinColor} from '../skin-tones.js';
-import {Button, Field, Select, RangeControl} from './primitives.jsx';
+import {Button, Field, Select, RangeControl, PreparedCompositionGuidance} from './primitives.jsx';
 
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const BUSY_PHASES = new Set(['loading', 'baking', 'preparing', 'rendering', 'denoising']);
@@ -79,7 +79,7 @@ function BodyPanelView({app, snapshot}) {
     }
   };
   const ranges = group => bodyParams.filter(param => param[5] === group).map(([id, label, min, max, step]) => (
-    <RangeControl key={id} id={id} label={label} value={body[id] ?? BODY_DEFAULTS[id] ?? 0}
+    <RangeControl key={`${study.id}:${id}`} id={id} label={label} value={body[id] ?? BODY_DEFAULTS[id] ?? 0}
       min={min} max={max} step={step} disabled={fixed || blocked}
       format={value => bodyValue(id, value)}
       onChange={value => actions.editBody(id, Number(value))}
@@ -88,6 +88,8 @@ function BodyPanelView({app, snapshot}) {
 
   return <section data-surface-content="body"><div data-panel-content="body">
     <h2 className="sr-only">Body reference</h2>
+    <PreparedCompositionGuidance app={app} snapshot={snapshot} />
+    <p className="hint body-lock-scope">Locks protect tattoo placement. Body proportions can still change.</p>
     <details className="control-details body-source-details">
       <summary>Body source <span>{model.label}</span></summary>
       <div className="body-model-control">
@@ -155,7 +157,7 @@ function BodyPanelView({app, snapshot}) {
         <p className="hint">Skin tones adapted from <a href="https://skintone.google/get-started" target="_blank" rel="noopener">Ellis Monk’s scale</a> (2019) · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
       </div>
     </section>
-    <output id="body-measurements" className="hint">{measurements}</output>
+    <output id="body-measurements" className="hint">{measurements && `Approximate model measurements: ${measurements}. These are reference dimensions, not measured personal circumferences.`}</output>
     <Button id="reset-body" data-shape-control="" hidden={fixed} disabled={fixed || blocked} onClick={() => actions.resetBody()}>Reset proportions</Button>
     <div className="preview-controls">
       <div className="small-actions">
@@ -177,7 +179,7 @@ export function bodyPanelPropsEqual(previous, next) {
   const a = previous.snapshot, b = next.snapshot, x = a.ui || {}, y = b.ui || {};
   const previewA = x.preview || {}, previewB = y.preview || {};
   return previous.app === next.app && a.study?.id === b.study?.id && a.study?.body === b.study?.body &&
-    x.blocked === y.blocked && x.lighting === y.lighting && x.quality === y.quality &&
+    a.runtimeCapabilities?.preparedComposition?.projectId === b.runtimeCapabilities?.preparedComposition?.projectId && x.blocked === y.blocked && x.lighting === y.lighting && x.quality === y.quality &&
     MEASUREMENTS.every(([key]) => x.measurements?.[key] === y.measurements?.[key]) &&
     previewA.phase === previewB.phase && Math.floor(previewA.samples || 0) === Math.floor(previewB.samples || 0) &&
     previewA.denoised === previewB.denoised && previewA.denoiseWarning === previewB.denoiseWarning &&

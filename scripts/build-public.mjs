@@ -1,3 +1,4 @@
+import {sourceIdentity} from './source-identity.mjs';
 import {createHash, randomUUID} from 'node:crypto';
 import {lstat, mkdir, readFile, readdir, rename, rm, writeFile} from 'node:fs/promises';
 import {dirname, isAbsolute, relative, resolve, sep} from 'node:path';
@@ -74,6 +75,7 @@ export async function buildPublic({sourceRoot = repositoryRoot, outputDir = reso
   headers.bytes = Buffer.from(headers.bytes.toString('utf8').replaceAll('{{IMPORT_MAP_HASH}}', importMapHash));
   const manifest = {
     schemaVersion:1,
+    source:await sourceIdentity(sourceRoot),
     hashAlgorithm:'SHA-256',
     entryPoint:'/studio/',
     manifestExcludesItself:true,

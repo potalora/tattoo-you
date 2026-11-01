@@ -70,6 +70,31 @@ test('allocation follows compact width and enabled GPU texture limits',async()=>
   try{await atlas.update({bodyGeometry:f.body,decals:[]});assert.equal(atlas.texture.image.width,want);}finally{await atlas.dispose();f.dispose();}
  }
 });
+test('focused ink retains local texel density while composing every overlapping layer',async()=>{
+ const f=fixture(),r=renderer(),atlas=api.createInkAtlas(r,{size:32,focusSize:64});
+ // A small body UV island uses only ~3 base-atlas texels, even with a large source image.
+ f.body.attributes.uv.array.set([.6,.8,.7,.8,.6,.84,.1,.1,.2,.14,.1,.14]);
+ const focus={...f.decal,sourceFaceIndices:new Uint32Array([0]),mesh:f.decal.mesh.clone()};
+ focus.mesh.geometry=f.decal.mesh.geometry.clone();focus.mesh.geometry.setIndex([0,1,2]);
+ try{
+  await atlas.update({bodyGeometry:f.body,decals:[focus,f.decal],focusDecals:[focus]});
+  assert.ok(atlas.detail,'a focused atlas is available to the skin material');
+  assert.equal(atlas.texture.image.width,32);assert.equal(atlas.detail.texture.image.width,64);
+  const {offset,scale}=atlas.detail;
+  assert.ok(scale[0]<.11&&scale[1]<.05,'the focused atlas covers the local island, not the full body');
+  const detailDraw=r.draws.find(draw=>draw.target.texture===atlas.detail.texture);
+  assert.equal(detailDraw.scene.children.length,3,'other layers still participate in overlap composition');
+  const left=new THREE.Vector3(offset[0],offset[1],0).project(detailDraw.camera);
+  const right=new THREE.Vector3(offset[0]+scale[0],offset[1]+scale[1],0).project(detailDraw.camera);
+  assert.ok(Math.abs(left.x+1)<1e-5&&Math.abs(left.y-1)<1e-5);
+  assert.ok(Math.abs(right.x-1)<1e-5&&Math.abs(right.y+1)<1e-5);
+  const firstDetail=atlas.detail.texture;
+  await atlas.update({bodyGeometry:f.body,decals:[focus,f.decal],focusDecals:[f.decal]});
+  assert.equal(atlas.detail.texture,firstDetail,'selection changes reuse one bounded focused target');
+  assert.ok(atlas.detail.scale[0]>.5,'a new selection updates the UV window');
+  await atlas.update({bodyGeometry:f.body,decals:[]});assert.equal(atlas.detail,null);
+ }finally{await atlas.dispose();focus.mesh.geometry.dispose();f.dispose();}
+});
 test('invalid UVs fail before render-target mutation and render failures clean resources then allow retry',async()=>{
  assert.equal(typeof api.createInkAtlas,'function');const f=fixture(),r=renderer(),atlas=api.createInkAtlas(r,{size:16});
  f.body.attributes.uv.array[0]=2;await assert.rejects(atlas.update({bodyGeometry:f.body,decals:[]}),/UV|atlas/i);assert.equal(atlas.texture,null);assert.equal(r.targets.length,0);f.body.attributes.uv.array[0]=0;

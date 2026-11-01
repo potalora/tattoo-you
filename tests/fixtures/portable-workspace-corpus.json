@@ -1,0 +1,1424 @@
+{
+  "description": "Shared bounded portable JSON decisions; image decoder behavior is checked separately with real Pillow and browser decoder tests.",
+  "modelFaceCounts": {
+    "makehuman-v1": 107024,
+    "atelier-v1": 52544,
+    "mhr-v1": 36874,
+    "drummyfish-v1": 8072,
+    "blender-studio-v1": 84680
+  },
+  "limits": {
+    "maxProjects": 100,
+    "maxLayers": 16,
+    "maxAssets": 500
+  },
+  "assetIds": [
+    "art"
+  ],
+  "base": {
+    "projects": [
+      {
+        "id": "study",
+        "name": "Portable study",
+        "body": {
+          "bodyModelId": "makehuman-v1",
+          "body": "male",
+          "stature": 175.3,
+          "build": 0,
+          "shoulders": 0,
+          "waist": 0,
+          "hips": 0,
+          "arms": 8,
+          "legs": 0,
+          "bust": 0,
+          "skin": "monk05",
+          "clothing": false
+        },
+        "tattoos": [
+          {
+            "id": "layer",
+            "assetId": "art",
+            "name": "Design",
+            "region": "custom",
+            "placement": {
+              "faceIndex": 0,
+              "barycentric": [
+                1,
+                0,
+                0
+              ]
+            },
+            "width": 7,
+            "rotation": 0,
+            "opacity": 0.9,
+            "flip": false,
+            "visible": true,
+            "locked": false,
+            "existing": false,
+            "offsetX": 0,
+            "offsetY": 0
+          }
+        ],
+        "selectedIds": [
+          "layer"
+        ],
+        "camera": null,
+        "updatedAt": "2026-10-22T12:00:00Z"
+      }
+    ],
+    "activeProjectId": "study"
+  },
+  "cases": [
+    {
+      "name": "baseline",
+      "valid": true,
+      "patches": []
+    },
+    {
+      "name": "empty",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects"
+          ],
+          "value": []
+        },
+        {
+          "path": [
+            "activeProjectId"
+          ],
+          "value": null
+        }
+      ]
+    },
+    {
+      "name": "null-active",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "activeProjectId"
+          ],
+          "value": null
+        }
+      ]
+    },
+    {
+      "name": "unknown-active",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "activeProjectId"
+          ],
+          "value": "missing"
+        }
+      ]
+    },
+    {
+      "name": "legacy-model",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "bodyModelId"
+          ],
+          "remove": true
+        }
+      ]
+    },
+    {
+      "name": "makehuman-v1-face--1",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "bodyModelId"
+          ],
+          "value": "makehuman-v1"
+        },
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "placement",
+            "faceIndex"
+          ],
+          "value": 107023
+        }
+      ]
+    },
+    {
+      "name": "makehuman-v1-face-0",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "bodyModelId"
+          ],
+          "value": "makehuman-v1"
+        },
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "placement",
+            "faceIndex"
+          ],
+          "value": 107024
+        }
+      ]
+    },
+    {
+      "name": "atelier-v1-face--1",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "bodyModelId"
+          ],
+          "value": "atelier-v1"
+        },
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "placement",
+            "faceIndex"
+          ],
+          "value": 52543
+        }
+      ]
+    },
+    {
+      "name": "atelier-v1-face-0",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "bodyModelId"
+          ],
+          "value": "atelier-v1"
+        },
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "placement",
+            "faceIndex"
+          ],
+          "value": 52544
+        }
+      ]
+    },
+    {
+      "name": "mhr-v1-face--1",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "bodyModelId"
+          ],
+          "value": "mhr-v1"
+        },
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "placement",
+            "faceIndex"
+          ],
+          "value": 36873
+        }
+      ]
+    },
+    {
+      "name": "mhr-v1-face-0",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "bodyModelId"
+          ],
+          "value": "mhr-v1"
+        },
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "placement",
+            "faceIndex"
+          ],
+          "value": 36874
+        }
+      ]
+    },
+    {
+      "name": "drummyfish-v1-face--1",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "bodyModelId"
+          ],
+          "value": "drummyfish-v1"
+        },
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "placement",
+            "faceIndex"
+          ],
+          "value": 8071
+        }
+      ]
+    },
+    {
+      "name": "drummyfish-v1-face-0",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "bodyModelId"
+          ],
+          "value": "drummyfish-v1"
+        },
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "placement",
+            "faceIndex"
+          ],
+          "value": 8072
+        }
+      ]
+    },
+    {
+      "name": "blender-studio-v1-face--1",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "bodyModelId"
+          ],
+          "value": "blender-studio-v1"
+        },
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "placement",
+            "faceIndex"
+          ],
+          "value": 84679
+        }
+      ]
+    },
+    {
+      "name": "blender-studio-v1-face-0",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "bodyModelId"
+          ],
+          "value": "blender-studio-v1"
+        },
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "placement",
+            "faceIndex"
+          ],
+          "value": 84680
+        }
+      ]
+    },
+    {
+      "name": "bad-model-unknown",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "bodyModelId"
+          ],
+          "value": "unknown"
+        }
+      ]
+    },
+    {
+      "name": "bad-model-__proto__",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "bodyModelId"
+          ],
+          "value": "__proto__"
+        }
+      ]
+    },
+    {
+      "name": "bad-model-None",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "bodyModelId"
+          ],
+          "value": null
+        }
+      ]
+    },
+    {
+      "name": "mhr-v1-female-rejected",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "bodyModelId"
+          ],
+          "value": "mhr-v1"
+        },
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "body"
+          ],
+          "value": "female"
+        }
+      ]
+    },
+    {
+      "name": "drummyfish-v1-female-rejected",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "bodyModelId"
+          ],
+          "value": "drummyfish-v1"
+        },
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "body"
+          ],
+          "value": "female"
+        }
+      ]
+    },
+    {
+      "name": "stature-150",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "stature"
+          ],
+          "value": 150
+        }
+      ]
+    },
+    {
+      "name": "stature-205",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "stature"
+          ],
+          "value": 205
+        }
+      ]
+    },
+    {
+      "name": "stature-149.99",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "stature"
+          ],
+          "value": 149.99
+        }
+      ]
+    },
+    {
+      "name": "stature-205.01",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "stature"
+          ],
+          "value": 205.01
+        }
+      ]
+    },
+    {
+      "name": "stature-True",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "stature"
+          ],
+          "value": true
+        }
+      ]
+    },
+    {
+      "name": "stature-1",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "stature"
+          ],
+          "value": "1"
+        }
+      ]
+    },
+    {
+      "name": "build--30",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "build"
+          ],
+          "value": -30
+        }
+      ]
+    },
+    {
+      "name": "build-40",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "build"
+          ],
+          "value": 40
+        }
+      ]
+    },
+    {
+      "name": "build--30.01",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "build"
+          ],
+          "value": -30.01
+        }
+      ]
+    },
+    {
+      "name": "build-40.01",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "build"
+          ],
+          "value": 40.01
+        }
+      ]
+    },
+    {
+      "name": "build-True",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "build"
+          ],
+          "value": true
+        }
+      ]
+    },
+    {
+      "name": "build-1",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "build"
+          ],
+          "value": "1"
+        }
+      ]
+    },
+    {
+      "name": "mass-0",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "mass"
+          ],
+          "value": 0
+        }
+      ]
+    },
+    {
+      "name": "mass-100",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "mass"
+          ],
+          "value": 100
+        }
+      ]
+    },
+    {
+      "name": "mass--0.01",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "mass"
+          ],
+          "value": -0.01
+        }
+      ]
+    },
+    {
+      "name": "mass-100.01",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "mass"
+          ],
+          "value": 100.01
+        }
+      ]
+    },
+    {
+      "name": "mass-True",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "mass"
+          ],
+          "value": true
+        }
+      ]
+    },
+    {
+      "name": "mass-1",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "mass"
+          ],
+          "value": "1"
+        }
+      ]
+    },
+    {
+      "name": "armsLeft--20",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "armsLeft"
+          ],
+          "value": -20
+        }
+      ]
+    },
+    {
+      "name": "armsLeft-20",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "armsLeft"
+          ],
+          "value": 20
+        }
+      ]
+    },
+    {
+      "name": "armsLeft--20.01",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "armsLeft"
+          ],
+          "value": -20.01
+        }
+      ]
+    },
+    {
+      "name": "armsLeft-20.01",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "armsLeft"
+          ],
+          "value": 20.01
+        }
+      ]
+    },
+    {
+      "name": "armsLeft-True",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "armsLeft"
+          ],
+          "value": true
+        }
+      ]
+    },
+    {
+      "name": "armsLeft-1",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "body",
+            "armsLeft"
+          ],
+          "value": "1"
+        }
+      ]
+    },
+    {
+      "name": "width-0.5",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "width"
+          ],
+          "value": 0.5
+        }
+      ]
+    },
+    {
+      "name": "width-40",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "width"
+          ],
+          "value": 40
+        }
+      ]
+    },
+    {
+      "name": "width-0.49",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "width"
+          ],
+          "value": 0.49
+        }
+      ]
+    },
+    {
+      "name": "width-40.01",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "width"
+          ],
+          "value": 40.01
+        }
+      ]
+    },
+    {
+      "name": "offsetX--30",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "offsetX"
+          ],
+          "value": -30
+        }
+      ]
+    },
+    {
+      "name": "offsetX-30",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "offsetX"
+          ],
+          "value": 30
+        }
+      ]
+    },
+    {
+      "name": "offsetX--30.01",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "offsetX"
+          ],
+          "value": -30.01
+        }
+      ]
+    },
+    {
+      "name": "offsetX-30.01",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "offsetX"
+          ],
+          "value": 30.01
+        }
+      ]
+    },
+    {
+      "name": "rotation--180",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "rotation"
+          ],
+          "value": -180
+        }
+      ]
+    },
+    {
+      "name": "rotation-180",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "rotation"
+          ],
+          "value": 180
+        }
+      ]
+    },
+    {
+      "name": "rotation--180.01",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "rotation"
+          ],
+          "value": -180.01
+        }
+      ]
+    },
+    {
+      "name": "rotation-180.01",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "rotation"
+          ],
+          "value": 180.01
+        }
+      ]
+    },
+    {
+      "name": "opacity-0.1",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "opacity"
+          ],
+          "value": 0.1
+        }
+      ]
+    },
+    {
+      "name": "opacity-1",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "opacity"
+          ],
+          "value": 1
+        }
+      ]
+    },
+    {
+      "name": "opacity-0.09000000000000001",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "opacity"
+          ],
+          "value": 0.09000000000000001
+        }
+      ]
+    },
+    {
+      "name": "opacity-1.01",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "opacity"
+          ],
+          "value": 1.01
+        }
+      ]
+    },
+    {
+      "name": "unicode-scalar",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "name"
+          ],
+          "value": "Caf\u00e9 \ud83d\udc3b"
+        }
+      ]
+    },
+    {
+      "name": "unicode-surrogate",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "name"
+          ],
+          "value": "\ud800"
+        }
+      ]
+    },
+    {
+      "name": "duplicate-selection",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "selectedIds"
+          ],
+          "value": [
+            "layer",
+            "layer"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "unknown-asset",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "assetId"
+          ],
+          "value": "missing"
+        }
+      ]
+    },
+    {
+      "name": "bad-barycentric",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "placement",
+            "barycentric"
+          ],
+          "value": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        }
+      ]
+    },
+    {
+      "name": "bad-date",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "updatedAt"
+          ],
+          "value": "2026-02-30T12:00:00Z"
+        }
+      ]
+    },
+    {
+      "name": "unknown-reference-extension",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "extra"
+          ],
+          "value": {
+            "uploadedAssetId": "missing"
+          }
+        }
+      ]
+    },
+    {
+      "name": "optional-json-extension",
+      "valid": true,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "extra"
+          ],
+          "value": {
+            "version": 2,
+            "labels": [
+              "hi"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "boolean-number",
+      "valid": false,
+      "patches": [
+        {
+          "path": [
+            "projects",
+            0,
+            "tattoos",
+            0,
+            "width"
+          ],
+          "value": true
+        }
+      ]
+    },
+    {
+      "name": "project-capacity-100",
+      "valid": true,
+      "patches": [],
+      "repeatProjects": 100
+    },
+    {
+      "name": "project-capacity-101",
+      "valid": false,
+      "patches": [],
+      "repeatProjects": 101
+    },
+    {
+      "name": "layer-capacity-16",
+      "valid": true,
+      "patches": [],
+      "repeatLayers": 16
+    },
+    {
+      "name": "layer-capacity-17",
+      "valid": false,
+      "patches": [],
+      "repeatLayers": 17
+    },
+    {
+      "name": "duplicate-project",
+      "valid": false,
+      "patches": [],
+      "duplicateProject": true
+    },
+    {
+      "name": "duplicate-layer",
+      "valid": false,
+      "patches": [],
+      "duplicateLayer": true
+    },
+    {
+      "name": "notes-5000",
+      "valid": true,
+      "patches": [],
+      "string": {
+        "path": [
+          "projects",
+          0,
+          "notes"
+        ],
+        "count": 5000
+      }
+    },
+    {
+      "name": "notes-5001",
+      "valid": false,
+      "patches": [],
+      "string": {
+        "path": [
+          "projects",
+          0,
+          "notes"
+        ],
+        "count": 5001
+      }
+    },
+    {
+      "name": "name-120",
+      "valid": true,
+      "patches": [],
+      "string": {
+        "path": [
+          "projects",
+          0,
+          "name"
+        ],
+        "count": 120
+      }
+    },
+    {
+      "name": "name-121",
+      "valid": false,
+      "patches": [],
+      "string": {
+        "path": [
+          "projects",
+          0,
+          "name"
+        ],
+        "count": 121
+      }
+    },
+    {
+      "name": "project-json-limit",
+      "valid": false,
+      "patches": [],
+      "string": {
+        "path": [
+          "projects",
+          0,
+          "extra"
+        ],
+        "count": 2097152
+      }
+    },
+    {
+      "name": "aggregate-json-limit",
+      "valid": false,
+      "patches": [],
+      "repeatProjects": 9,
+      "string": {
+        "path": [
+          "projects",
+          0,
+          "extra"
+        ],
+        "count": 1000000
+      },
+      "copyStringToProjects": true
+    }
+  ],
+  "assetBase": {
+    "id": "art",
+    "name": "Synthetic pixel",
+    "width": 1,
+    "height": 1,
+    "createdAt": "2026-10-22T12:00:00Z",
+    "dataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
+  },
+  "assetCases": [
+    {
+      "name": "valid-png",
+      "valid": true,
+      "patch": {}
+    },
+    {
+      "name": "invalid-base64",
+      "valid": false,
+      "patch": {
+        "dataUrl": "data:image/png;base64,!!!!"
+      }
+    },
+    {
+      "name": "bad-image-data",
+      "valid": false,
+      "patch": {
+        "dataUrl": "data:image/png;base64,bm90LWFuLWltYWdl"
+      }
+    },
+    {
+      "name": "dimension-mismatch",
+      "valid": false,
+      "patch": {
+        "width": 2
+      }
+    },
+    {
+      "name": "bad-created-at",
+      "valid": false,
+      "patch": {
+        "createdAt": 17
+      }
+    },
+    {
+      "name": "unsupported-mime",
+      "valid": false,
+      "patch": {
+        "dataUrl": "data:image/svg+xml;base64,PHN2Zy8+"
+      }
+    },
+    {
+      "name": "legacy-created-at-text",
+      "valid": true,
+      "patch": {
+        "createdAt": "not-a-date"
+      }
+    }
+  ]
+}

@@ -1,4 +1,6 @@
 import {copy, History, createBodyModelCopy, uid} from './model.js';
+import {validateWorkspace} from './workspace-validation.js';
+import {STORAGE_LIMITS} from './storage-limits.js';
 import {resolveBodyModel} from './model-catalog.js';
 
 /** Study commands own history and transactions; services own rendering and UI. */
@@ -34,21 +36,36 @@ export function createStudyController(state, services) {
   function mutate(change, {history = true, scene = true} = {}) {
     if (state.convertingBody) return false;
     const study = active();
-    const before = copy(study);
+    const before = copy(study), candidate = copy(study);
     try {
-      if (history) hist().push(study);
-      change(study);
-      study.updatedAt = new Date().toISOString();
-      render();
-      if (scene) renderScene();
-      scheduleSave();
-      return true;
+      change(candidate);
+      candidate.updatedAt = new Date().toISOString();
+      validateWorkspace({projects: state.workspace.projects.map(p => p.id === candidate.id ? candidate : p), activeProjectId: candidate.id}, new Set(state.workspace.assets.map(asset => asset.id)));
     } catch (error) {
-      if (history) hist().past.pop();
-      Object.assign(study, before);
       say(error.message);
       return false;
     }
+    if (history) hist().push(before);
+    for (const key of Object.keys(study)) delete study[key];
+    Object.assign(study, candidate);
+    render();
+    if (scene) renderScene();
+    scheduleSave();
+    return true;
+  }
+
+  function hasStudyCapacity() {
+    if (state.workspace.projects.length < STORAGE_LIMITS.maxProjects) return true;
+    say(`A workspace can hold ${STORAGE_LIMITS.maxProjects} studies. Remove a study before creating another.`);
+    return false;
+  }
+
+  function canAddStudy(study) {
+    if (!hasStudyCapacity()) return false;
+    try {
+      validateWorkspace({projects: [...state.workspace.projects, study], activeProjectId: study.id}, new Set(state.workspace.assets.map(asset => asset.id)));
+      return true;
+    } catch (error) { say(error.message); return false; }
   }
 
   function setProject(study) {
@@ -60,9 +77,14 @@ export function createStudyController(state, services) {
   }
 
   async function saveAlternative() {
-    if (state.convertingBody) return false;
-    const name = await askName('Save an alternative', (active().name + ' — alternative').slice(0, 120));
+    if (state.convertingBody || !hasStudyCapacity()) return false;
+    const name = await askName('Create an alternative', (active().name + ' — alternative').slice(0, 120), {
+      submitLabel: 'Create alternative', description: 'Create a separate study. Your original is kept.',
+    });
     if (!name?.trim()) return false;
+    const study = copy(active());
+    study.id = uid(); study.name = name.trim().slice(0, 120);
+    if (!canAddStudy(study)) return false;
     const wasReady = state.ready;
     state.convertingBody = true;
     state.ready = false;
@@ -74,9 +96,7 @@ export function createStudyController(state, services) {
         say('Save or resolve the open changes before saving an alternative.');
         return false;
       }
-      const study = copy(active());
-      study.id = uid();
-      study.name = name.trim().slice(0, 120);
+      Object.assign(study, copy(active()), {id: study.id, name: study.name});
       study.updatedAt = new Date().toISOString();
       state.workspace.projects.push(study);
       state.workspace.activeProjectId = study.id;
@@ -118,7 +138,11 @@ export function createStudyController(state, services) {
       render();
       if (!await renderScene()) throw Error('The selected study could not load.');
       const selected = active();
-      if (selected.camera) state.studio.restoreCamera(selected.camera);
+      if (selected.camera) {
+        state.currentView = 'custom';
+        state.studio.restoreCamera(selected.camera);
+        setCameraSelection('custom');
+      }
       else if (!await chooseCamera('body')) throw Error('The selected study preview could not finish.');
       scheduleSave();
       return true;
@@ -165,6 +189,11 @@ export function createStudyController(state, services) {
       render();
       return false;
     }
+    if (!hasStudyCapacity()) return false;
+    let prepared;
+    try { prepared = createBodyModelCopy(active(), target.id, {anatomy: requestedAnatomy}); }
+    catch (error) { say(error.message); return false; }
+    if (!canAddStudy(prepared)) return false;
     state.convertingBody = true;
     const wasReady = state.ready;
     state.ready = false;
@@ -177,7 +206,7 @@ export function createStudyController(state, services) {
       if (!await flush()) throw Error('Save or resolve the open changes before trying another body.');
       source = active();
       sourceCamera = state.studio.getCamera();
-      created = createBodyModelCopy(source, target.id, {anatomy: requestedAnatomy});
+      created = prepared;
       state.workspace.projects.push(created);
       state.workspace.activeProjectId = created.id;
       placeMode(false);
@@ -230,6 +259,6 @@ export function createStudyController(state, services) {
 
   return {
     active, hist, mutate, setProject, saveAlternative, switchProject,
-    changeAnatomy, useBodyModel, clearHistory, invalidateArtworkHistory,
+    changeAnatomy, useBodyModel, clearHistory, invalidateArtworkHistory, hasStudyCapacity, canAddStudy,
   };
 }

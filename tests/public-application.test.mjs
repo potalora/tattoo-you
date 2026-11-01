@@ -81,7 +81,7 @@ function localApplication({indexedDB = new IDBFactory(), deniedLocalStorage = fa
   const app = createApplication({api, browser,
     createStudio: async () => ({
       update: async (...args) => { updates.push(structuredClone(args)); },
-      view() {}, restoreCamera() {}, setPlaceMode() {}, dispose() {},
+      view() {}, restoreCamera() {}, setPlaceMode() {}, setQuality() {}, dispose() {},
     }),
     observeLayout: () => ({measure: () => ({x: 0, y: 0, width: 800, height: 700}), dispose() {}}),
     fileServices: {download: (name, blob) => downloads.push({name, blob})},
@@ -180,7 +180,7 @@ test('failed startup normalization keeps the readable workspace available for ba
   });
   const study = project('Preserved study');
   study.notes = 'Keep these notes even when storage is full';
-  await h.localApi('workspace', 'PUT', {revision: 0, projects: [study], activeProjectId: null});
+  await h.localApi('workspace', 'PUT', {revision: (await h.localApi('workspace')).revision, projects: [study], activeProjectId: null});
   const before = await h.localApi('backup');
   const put = IDBObjectStore.prototype.put;
   t.mock.method(IDBObjectStore.prototype, 'put', function (...args) {
@@ -257,3 +257,18 @@ for (const empty of [true, false]) {
     assert.equal(await h.app.flush(), true);
   });
 }
+
+test('real browser persistence normalizes empty restores without private seeding and remains reloadable',async t=>{
+ const {IDBFactory}=await import('fake-indexeddb');const {createLocalApi}=await import('../studio/local-api.js');
+ for(const empty of [true,false]){
+  const api=createLocalApi({indexedDB:new IDBFactory(),name:'empty-restore-'+empty});t.after(()=>api.close());
+  const browser={location:{search:''},document:{body:{}},Blob,confirm:()=>true};
+  const app=createApplication({api,browser,storageMode:'browser',seedWorkspace:'empty',fileServices:{download(){},seed(){throw Error('Private migration must not run');}}});t.after(()=>app.dispose());
+  await app.initialize();const restored=project('Imported without active');
+  const backup={version:3,projects:empty?[]:[restored],activeProjectId:null,assets:[]};
+  assert.equal(await app.actions.restoreBackup({size:100,text:async()=>JSON.stringify(backup)}),true);
+  const actual=app.getSnapshot();assert.ok(actual.study);assert.equal(actual.workspace.activeProjectId,actual.study.id);
+  const reloaded=await api('workspace');assert.deepEqual(reloaded.projects,actual.workspace.projects);assert.equal(reloaded.activeProjectId,actual.study.id);
+  await app.actions.exportBackup();assert.match(app.getSnapshot().ui.dataStatus,/download started/);
+ }
+});

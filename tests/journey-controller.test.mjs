@@ -12,7 +12,7 @@ async function harness(t,{existing=false,full=false,save=async()=>{}}={}){
   if(full)for(let i=0;i<MAX_TATTOOS;i++)addTattoo(p,asset);
   const messages=[],panels=[],focus=[],writes=[],timers=new Map(),body={inert:false};
   let timerId=0;
-  const engine={update:async()=>{},view(){},getCamera:()=>({position:[1,2,3],target:[0,1,0]}),restoreCamera(){},setPlaceMode(){},dispose(){}};
+  const engine={update:async()=>{},view(){},getCamera:()=>({position:[1,2,3],target:[0,1,0]}),restoreCamera(){},setQuality(){},setPlaceMode(){},dispose(){}};
   const app=createApplication({
     createStudio:async()=>engine,
     observeLayout:()=>({measure:()=>null,dispose(){}}),

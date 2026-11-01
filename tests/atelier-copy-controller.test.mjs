@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {BODY_DEFAULTS,project,addTattoo} from '../studio/model.js';
+import {resolveBodyModel} from '../studio/model-catalog.js';
 import {createWorkspaceSync} from '../studio/workspace-sync.js';
 import {createStudyController} from '../studio/study-controller.js';
 function deferred(){let resolve;const promise=new Promise(a=>{resolve=a;});return {promise,resolve};}
 function harness({update=async()=>{},save=async()=>{},modelId='makehuman-v1',ackLost=false}={}){
  const original=project('Original',{...BODY_DEFAULTS,bodyModelId:modelId}),layer=addTattoo(original,{id:'art',name:'Existing ink'},true);
- layer.region='custom';layer.placement={faceIndex:70000,barycentric:[.2,.3,.5]};original.notes='Preserve this';
+ layer.region='custom';layer.placement={faceIndex:Math.min(70000,resolveBodyModel(modelId).faceCount-1),barycentric:[.2,.3,.5]};original.notes='Preserve this';
  const workspace={revision:0,projects:[original],activeProjectId:original.id,assets:[{id:'art'}]},body={inert:false},loading={hidden:true},messages=[],updates=[],writes=[],persisted=[],restored=[],timers=new Set();
  let camera={position:[1,1,3],target:[0,1,0]};
  let stored={revision:0,projects:structuredClone(workspace.projects),activeProjectId:original.id};
