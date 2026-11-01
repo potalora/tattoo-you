@@ -103,6 +103,71 @@ test('ink bake budgets retain desktop detail and reduce allocations on compact d
  assert.deepEqual(chooseBakeSizes({width:1200,maxTextureSize:1024}),{albedoSize:1024,roughnessSize:1024});
 });
 
+test('refined capture keeps focused albedo on its original body triangles without remapping normal or roughness UVs',async()=>{
+ const api=await import('../studio/path-preview.js');
+ const originalIndices=[...indices,0,3,4];
+ const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));geometry.setIndex(originalIndices);
+ const uvs=new Float32Array([.6,.8,.7,.8,.6,.84,.1,.1,.2,.1,.1,.2]);geometry.setAttribute('uv',new THREE.BufferAttribute(uvs,2));geometry.computeVertexNormals();
+ const normal=new THREE.Texture(),base=new THREE.Texture(),focused=new THREE.Texture(),roughness=new THREE.Texture();
+ const original=new THREE.MeshPhysicalMaterial({normalMap:normal}),body=new THREE.Mesh(geometry,original),scene=new THREE.Scene();scene.add(body);
+ const intact=geometry.clone();intact.computeTangents();
+ const resources=new Set();
+ try{
+  const source=await readFile(new URL('../studio/path-preview.js',import.meta.url),'utf8'),start=source.indexOf('function captureScene('),end=source.indexOf('/** Optional software-BVH',start);
+  const context=vm.createContext({THREE,physicalMaterial:api.physicalMaterial,cloneTraceLight:api.cloneTraceLight});vm.runInContext(source.slice(start,end),context);
+  const captured=context.captureScene({scene,bodyMesh:body,decals:[],albedo:base,roughness,detail:{albedo:focused,offset:[.59,.79],scale:[.12,.06]},resources});
+  const baseMesh=captured.children.find(mesh=>mesh.material.map===base),detailMesh=captured.children.find(mesh=>mesh.material.map===focused);
+  assert.ok(baseMesh&&detailMesh,'focused body triangles retain a separate high-resolution albedo map');
+  assert.deepEqual([...baseMesh.geometry.index.array],[3,4,5,0,3,4],'triangles crossing the crop boundary remain on the global map');assert.deepEqual([...detailMesh.geometry.index.array],[0,1,2]);
+  for(const mesh of [baseMesh,detailMesh]){
+   assert.deepEqual([...mesh.geometry.attributes.uv.array],[...uvs]);
+   assert.equal(mesh.material.normalMap,normal);assert.equal(mesh.material.roughnessMap,roughness);
+   assert.ok(mesh.geometry.attributes.tangent,'both partitions inherit tangents from the intact body');
+   assert.deepEqual([...mesh.geometry.attributes.tangent.array],[...intact.attributes.tangent.array]);
+  }
+  const sample=new THREE.Vector2(.65,.82).applyMatrix3(focused.matrix);
+  assert.ok(Math.abs(sample.x-.5)<1e-8&&Math.abs(sample.y-.5)<1e-8);
+  assert.deepEqual([...geometry.index.array],originalIndices,'capture leaves the interactive body intact');
+  assert.equal(geometry.attributes.tangent,undefined,'trace tangent generation does not mutate the live body');
+  assert.deepEqual(normal.matrix.elements,new THREE.Matrix3().elements);assert.deepEqual(roughness.matrix.elements,new THREE.Matrix3().elements);
+ }finally{for(const resource of resources)resource.dispose();intact.dispose();geometry.dispose();original.dispose();for(const texture of [normal,base,focused,roughness])texture.dispose();}
+});
+
+test('refined detail bake camera uses the selected UV window at full bake resolution',async()=>{
+ const {createUVBakeCamera}=await import('../studio/path-preview.js');
+ const camera=createUVBakeCamera({offset:[.6,.8],scale:[.1,.04]});
+ const corners=[[.6,.8,-1,1],[.7,.84,1,-1]];
+ for(const [u,v,x,y]of corners){const point=new THREE.Vector3(u,v,0).project(camera);assert.ok(Math.abs(point.x-x)<1e-8&&Math.abs(point.y-y)<1e-8);}
+});
+
+test('the actual refined albedo bake allocates the full local target and waits for submitted pixels',async()=>{
+ const api=await import('../studio/path-preview.js'),{assertBakeUVs}=await import('../studio/uv-bake.js');
+ const source=await readFile(new URL('../studio/path-preview.js',import.meta.url),'utf8');
+ const helper=source.slice(source.indexOf('function linearBakeMaterial('),source.indexOf('export function createUVBakeCamera('));
+ const bake=source.slice(source.indexOf('async function bakeAlbedo('),source.indexOf('export function physicalMaterial('));
+ let target=null,draw,release;const gate=new Promise(resolve=>release=resolve),prior={name:'prior'};
+ const renderer={backend:{device:{queue:{onSubmittedWorkDone:()=>gate}}},toneMapping:THREE.NeutralToneMapping,autoClear:false,getRenderTarget:()=>target||prior,setRenderTarget:value=>target=value,getClearColor:out=>out.set('#123456'),getClearAlpha:()=>1,setClearColor(){},render(scene,camera){draw={scene,camera,target};}};
+ const context=vm.createContext({THREE,assertBakeUVs,createUVBakeCamera:api.createUVBakeCamera,padBakeTarget:async()=>{}});vm.runInContext(helper+bake,context);
+ const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));geometry.setAttribute('uv',new THREE.BufferAttribute(bodyUVs,2));geometry.setIndex([...indices]);
+ const material=new THREE.MeshBasicMaterial(),resources=new Set();let settled=false;
+ try{
+  const task=context.bakeAlbedo(renderer,{bodyMesh:{geometry},albedoMaterial:material,decals:[],size:4096,bounds:{offset:[.6,.8],scale:[.1,.04]},check(){},resources}).then(value=>{settled=true;return value;});
+  await Promise.resolve();assert.equal(settled,false,'the cropped result cannot be consumed before GPU completion');
+  assert.equal(draw.target.width,4096);assert.equal(draw.target.height,4096);
+  const point=new THREE.Vector3(.65,.82,0).project(draw.camera);assert.ok(Math.abs(point.x)<1e-8&&Math.abs(point.y)<1e-8);
+  release();const texture=await task;assert.equal(texture,draw.target.texture);assert.equal(target,prior);
+ }finally{release();for(const resource of resources)resource.dispose();geometry.dispose();material.dispose();}
+});
+
+test('refined still retains desktop close-up pixels within a two-megapixel budget',async()=>{
+ const {chooseTraceScale}=await import('../studio/path-preview.js');assert.equal(typeof chooseTraceScale,'function');
+ assert.equal(chooseTraceScale({width:3072,height:1536,viewportWidth:1200}),.5);
+ assert.equal(chooseTraceScale({width:3072,height:1536,viewportWidth:430}),.25);
+ assert.equal(chooseTraceScale({width:3072,height:1536,viewportWidth:1200,memoryGB:4}),.25);
+ assert.equal(chooseTraceScale({width:1000,height:600,viewportWidth:1200}),1);
+ assert.ok(Math.abs(chooseTraceScale({width:2000,height:2000,viewportWidth:1200})-Math.sqrt(.5))<1e-10);
+});
+
 test('UV gutter padding prevents transparent-black bilinear seams and preserves tattoo/roughness values',async()=>{
  const {dilateBakePixels,BAKE_PADDING_RADIUS}=await import('../studio/uv-bake.js');
  // A narrow opaque UV island borders empty atlas texels. Its black end is ink,

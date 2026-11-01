@@ -94,15 +94,53 @@ export function createBodyContact(){
  }};
 }
 
-export async function createGalleryEnvironment(renderer,scene){
- RectAreaLightTexturesLib.init();THREE.RectAreaLightNode.setLTC(RectAreaLightTexturesLib);
+/** Presentation changes room geometry only; inspection modes retain their contract. */
+export function createGalleryPresentation(scene,group,room,{presentation='glass'}={}){
+ const instrument=presentation==='instrument';
+ if(instrument){
+  // A flat live color remains seamless. In refined stills the existing physical
+  // material adapter shades one continuous cyclorama instead of exposing the
+  // horizon between a diffuse floor and an unlit scene background. Its circular
+  // sweep keeps the same presentation through every orbit without moving it.
+  const profile=[new THREE.Vector2(0,0),new THREE.Vector2(5,0)];
+  for(let step=1;step<=24;step++){
+   const angle=step/24*Math.PI/2;
+   profile.push(new THREE.Vector2(5+3*Math.sin(angle),3*(1-Math.cos(angle))));
+  }
+  profile.push(new THREE.Vector2(8,10));
+  // Top-to-center winding faces the enclosure inward and its floor upward.
+  const geometry=new THREE.LatheGeometry(profile.reverse(),96);
+  // Close the sweep exactly: sin(2π)'s tiny residual can leave a ray-visible
+  // slit when a front/back camera lies precisely on the shared meridian.
+  for(const attribute of [geometry.attributes.position,geometry.attributes.normal])for(let at=0;at<profile.length;at++){
+   attribute.setXYZ(96*profile.length+at,attribute.getX(at),attribute.getY(at),attribute.getZ(at));
+  }
+  const ground=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({color:'#d9dcd5',toneMapped:false}));
+  ground.name='Instrument seamless ground';ground.position.y=-.002;group.add(ground);
+ }
+ if(room)room.visible=!instrument;
+ return {setMode(mode){
+  const studio=mode==='studio';group.visible=studio;
+  scene.environmentIntensity=studio?.42:0;
+  scene.background=new THREE.Color(studio?(instrument?'#d9dcd5':'#bbbebc'):'#45423f');scene.fog=null;
+ }};
+}
+
+export async function createGalleryEnvironment(renderer,scene,options={}){
+ const resources=options.resources||{};
+ const initializeAreaLights=resources.initializeAreaLights||(()=>{RectAreaLightTexturesLib.init();THREE.RectAreaLightNode.setLTC(RectAreaLightTexturesLib);});
+ const loadRoom=resources.loadRoom||(()=>new GLTFLoader().loadAsync(asset('treatment-room.glb')));
+ const loadHDR=resources.loadHDR||(()=>new HDRLoader().loadAsync(new URL('./environment/studio_small_09_1k.hdr',import.meta.url).href));
+ const filterHDR=resources.filterHDR||(raw=>{const generator=new THREE.PMREMGenerator(renderer);try{return generator.fromEquirectangular(raw);}finally{generator.dispose();}});
+ initializeAreaLights();
  const group=new THREE.Group();scene.add(group);let raw,filtered,room;
  try{
-  const loaded=await Promise.allSettled([new GLTFLoader().loadAsync(asset('treatment-room.glb')),new HDRLoader().loadAsync(new URL('./environment/studio_small_09_1k.hdr',import.meta.url).href)]);
-  if(loaded[0].status==='fulfilled'){room=loaded[0].value.scene;group.add(room);}
+  const needsRoom=options.presentation!=='instrument';
+  const loaded=await Promise.allSettled([needsRoom?Promise.resolve().then(loadRoom):Promise.resolve(null),Promise.resolve().then(loadHDR)]);
+  if(loaded[0].status==='fulfilled'&&loaded[0].value){room=loaded[0].value.scene;group.add(room);}
   if(loaded[1].status==='fulfilled')raw=loaded[1].value;
   const failed=loaded.find(result=>result.status==='rejected');if(failed)throw failed.reason;
-  prepareTreatmentRoom(room);
+  if(room)prepareTreatmentRoom(room);
   const contact=createBodyContact();group.add(contact.group);
   const shadow=new THREE.Mesh(new THREE.PlaneGeometry(6,7),new THREE.ShadowMaterial({color:'#151a20',opacity:.20}));
   shadow.name='Live body contact shadow';shadow.rotation.x=-Math.PI/2;shadow.position.y=.001;shadow.receiveShadow=true;shadow.userData.rasterOnly=true;group.add(shadow);
@@ -113,12 +151,13 @@ export async function createGalleryEnvironment(renderer,scene){
    const light=new THREE.RectAreaLight(color,intensity,width,height);light.position.set(x,y,z);light.lookAt(0,1,0);lights.add(light);
   }
   raw.mapping=THREE.EquirectangularReflectionMapping;
-  const generator=new THREE.PMREMGenerator(renderer);try{filtered=generator.fromEquirectangular(raw);}finally{generator.dispose();}
+  filtered=filterHDR(raw);
   scene.environment=filtered.texture;scene.environmentRotation.y=.65;
+  const presentation=createGalleryPresentation(scene,group,room,options);
   let disposed=false;
   return {raw,group,metrics:environmentMetrics(group),suggestedLighting:{keyColor:'#fffdf9',fillColor:'#f4f6fa',keyIntensity:1.65,fillIntensity:.35,ambientIntensity:.32,keyPosition:[-2.4,3.2,2.6],keyTarget:[0,.9,0],shadowBounds:1.6},
-   updateView(camera,target){updateTreatmentView(room,camera,target);},updateBody(geometry){contact.update(geometry);},
-   setMode(mode){const studio=mode==='studio';group.visible=studio;scene.environmentIntensity=studio?.42:0;scene.background=new THREE.Color(studio?'#bbbebc':'#45423f');scene.fog=null;},
+   updateView(camera,target){if(room)updateTreatmentView(room,camera,target);},updateBody(geometry){contact.update(geometry);},
+   setMode:presentation.setMode,
    dispose(){if(disposed)return;disposed=true;disposeAtelierGroup(group);scene.remove(group);if(scene.environment===filtered.texture)scene.environment=null;filtered.dispose();raw.dispose();}
   };
  }catch(error){disposeAtelierGroup(group);scene.remove(group);filtered?.dispose();raw?.dispose();throw error;}

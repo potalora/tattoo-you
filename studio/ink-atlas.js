@@ -75,10 +75,10 @@ function padAtlas(renderer,target,resources){
  * albedo. The caller owns renderer scheduling and must serialize this operation
  * with ordinary rendering and tracing. This object's own updates are queued.
  */
-export function createInkAtlas(renderer,{size}={}){
+function createUVInkAtlas(renderer,{size}={}){
  let target=null,disposed=false,pending=Promise.resolve();
  const fence=async()=>{if(renderer.backend?.isWebGPUBackend)await renderer.backend.device.queue.onSubmittedWorkDone();};
- async function compose({bodyGeometry,decals=[]}){
+ async function compose({bodyGeometry,decals=[],bounds={offset:[0,0],scale:[1,1]}}){
   if(disposed)throw Error('Ink atlas is disposed.');
   const resources=new Set();let prior=null,success=false,fenced=false,createdTarget=false;
   try{
@@ -88,7 +88,8 @@ export function createInkAtlas(renderer,{size}={}){
    // Put logical UV v=0 at the top on both backends. Three's TextureNode
    // already flips render-target samples on WebGL; changing this camera as
    // well would flip the atlas twice. Browser parity still needs pixel checks.
-   const camera=new THREE.OrthographicCamera(0,1,0,1,.1,10);camera.position.z=1;camera.updateMatrixWorld();
+   const [x,y]=bounds.offset,[w,h]=bounds.scale;
+   const camera=new THREE.OrthographicCamera(x,x+w,y,y+h,.1,10);camera.position.z=1;camera.updateMatrixWorld();
    prior={target:renderer.getRenderTarget(),toneMapping:renderer.toneMapping,autoClear:renderer.autoClear,
     clearColor:renderer.getClearColor(new THREE.Color()),clearAlpha:renderer.getClearAlpha()};
    renderer.setRenderTarget(target);renderer.toneMapping=THREE.NoToneMapping;renderer.autoClear=true;renderer.setClearColor(0,0);
@@ -115,6 +116,51 @@ export function createInkAtlas(renderer,{size}={}){
   dispose(){
    disposed=true;
    const task=pending.then(async()=>{await fence().catch(()=>{});target?.dispose();target=null;});
+   pending=task.catch(()=>{});return task;
+  },
+ };
+}
+
+function focusBounds(bodyGeometry,decals){
+ if(!decals.length)return null;
+ const uv=bodyGeometry.attributes.uv,index=bodyGeometry.index;
+ let left=1,bottom=1,right=0,top=0;
+ for(const decal of decals)for(const face of decal.sourceFaceIndices)for(let k=0;k<3;k++){
+  const vertex=index.getX(face*3+k),x=uv.getX(vertex),y=uv.getY(vertex);
+  if(!Number.isFinite(x)||!Number.isFinite(y))throw Error('Focused ink requires valid body UV faces.');
+  left=Math.min(left,x);bottom=Math.min(bottom,y);right=Math.max(right,x);top=Math.max(top,y);
+ }
+ if(right<=left||top<=bottom)return null;
+ // Leave a white guard around the supporting triangles so bilinear sampling
+ // cannot carry a cropped edge onto neighboring skin.
+ const dx=(right-left)*.01,dy=(top-bottom)*.01;
+ left=Math.max(0,left-dx);bottom=Math.max(0,bottom-dy);right=Math.min(1,right+dx);top=Math.min(1,top+dy);
+ return {offset:[left,bottom],scale:[right-left,top-bottom]};
+}
+
+/** One full-body atlas plus one reusable local atlas. All visible layers are
+ * composed into the local window, preserving their order and overlap. Detail
+ * follows selection without allocating a texture per tattoo. */
+export function createInkAtlas(renderer,{size,focusSize=size}={}){
+ const base=createUVInkAtlas(renderer,{size}),focus=createUVInkAtlas(renderer,{size:focusSize});
+ let detail=null,disposed=false,pending=Promise.resolve();
+ return {
+  get texture(){return base.texture;},
+  get detail(){return detail;},
+  update(input){
+   if(disposed)return Promise.reject(Error('Ink atlas is disposed.'));
+   const task=pending.then(async()=>{
+    const bounds=focusBounds(input.bodyGeometry,input.focusDecals||[]);
+    await base.update(input);
+    if(bounds){await focus.update({...input,bounds});detail={texture:focus.texture,...bounds};}
+    else detail=null;
+    return base.texture;
+   });
+   pending=task.catch(()=>{detail=null;});return task;
+  },
+  dispose(){
+   disposed=true;
+   const task=pending.then(async()=>{await Promise.all([base.dispose(),focus.dispose()]);detail=null;});
    pending=task.catch(()=>{});return task;
   },
  };

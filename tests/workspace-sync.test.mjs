@@ -142,7 +142,8 @@ test('render failures including synchronous update errors block stale captures a
   }});
   assert.equal(await h.sync.renderScene(),false);assert.equal(h.state.lastRenderOK,false);
   assert.equal(h.state.renderTask,null);assert.equal(h.state.rendering,false);assert.equal(h.busy.at(-1),false);
-  assert.match(h.messages.at(-1),/Preview error: Device unavailable/);
+  assert.match(h.messages.at(-1),/Preview unavailable/);
+  assert.doesNotMatch(h.messages.at(-1),/Device unavailable/,'technical detail belongs in previewError');
   failing=false;assert.equal(await h.sync.renderScene(),true);assert.equal(h.state.lastRenderOK,true);
  }
  assert.equal(errors.mock.callCount(),2);

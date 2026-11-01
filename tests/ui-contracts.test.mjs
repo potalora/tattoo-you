@@ -5,7 +5,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {loadJsx} from './helpers/load-jsx.mjs';
 import {BODY_DEFAULTS} from '../studio/model.js';
 
-const [{CompositionPanel}, {ArtworkPanel}, {BodyPanel}, {RangeControl, closeMenuThen}, {StudyCard, Header}] = await Promise.all([
+const [{CompositionPanel}, {ArtworkPanel}, {BodyPanel}, {RangeControl, closeMenuThen}, {StudyCard, Header, CameraDock, PreviewRecovery, observeRecoveryHeaderBounds}] = await Promise.all([
   'composition-panel', 'artwork-panel', 'body-panel', 'primitives', 'main',
 ].map(name => loadJsx(new URL(`../studio/ui/${name}.jsx`, import.meta.url))));
 
@@ -18,6 +18,32 @@ function fixture() {
     stats: {renderer: 'WebGPU', surface: 'Worker', pixelRatio: 1},
   }}};
 }
+
+test('instrument header exposes history without losing study, save and export controls', () => {
+  const props = withUI(fixture(), {ready: true, canUndo: true, canRedo: false, saveLabel: 'Saved in this browser', retry: {hidden: true, text: 'Retry save'}});
+  const html = renderToStaticMarkup(React.createElement(Header, {...props, instrument: true}));
+  assert.match(html, /aria-label="Undo"/);
+  assert.match(html, /aria-label="Redo"/);
+  assert.match(html, /id="project-select"/);
+  assert.match(html, /aria-label="Export image"/);
+  const redo = /<button\b[^>]*aria-label="Redo"[^>]*>/.exec(html)?.[0];
+  assert.match(redo || '', /disabled/);
+  const original = renderToStaticMarkup(React.createElement(Header, props));
+  assert.doesNotMatch(original, /aria-label="Undo"/);
+});
+
+test('instrument exposes the layer bank by default while glass keeps its original disclosure', () => {
+  const props = fixture();
+  props.snapshot.study.tattoos = [{id: 'layer', name: 'Original design', assetId: 'art', width: 7, visible: true, locked: true}];
+  props.snapshot.workspace.assets = [{id: 'art', url: '/art.png'}];
+  const instrument = renderToStaticMarkup(React.createElement(CompositionPanel, {...props, instrument: true}));
+  assert.match(instrument, /<details\b[^>]*class="control-details study-layers"[^>]*open=""/);
+  assert.match(instrument, /aria-label="Select Original design"/);
+  assert.match(instrument, /aria-label="Unlock Original design"/);
+  const original = renderToStaticMarkup(React.createElement(CompositionPanel, props));
+  assert.doesNotMatch(original, /<details\b[^>]*class="control-details study-layers"[^>]*open=""/);
+  assert.equal(CompositionPanel.compare(props, {...props, instrument: true}), false);
+});
 
 function withUI(props, change) {
   return {...props, snapshot: {...props.snapshot, ui: {...props.snapshot.ui, ...change}}};
@@ -93,7 +119,7 @@ test('range controls expose formatted physical units and percentages to assistiv
       id: 'range', label: 'Value', value, min: 0, max: 205, step: .1, format,
       onChange() {}, onCommit() {},
     }));
-    const input = /<input\b[^>]*>/.exec(html)[0];
+    const input = /<input\b[^>]*type="range"[^>]*>/.exec(html)[0];
     assert.ok(input.includes(`aria-valuetext="${expected}"`));
     assert.ok(html.includes('<label for="range">Value</label>'));
   }
@@ -224,14 +250,14 @@ test('compact study capsule retains secondary study actions and readable save st
   }
   assert.match(html, /class="save-status-short" aria-hidden="true">Saved</);
   assert.match(html, /Saved to workspace/);
-  assert.doesNotMatch(html, /id="help-open"/, 'Help is grouped under Workspace rather than repeated in study actions');
+  assert.equal((html.match(/id="help-open"/g) || []).length, 1, 'Study actions expose Help directly');
 });
 
 test('artwork offers direct import and separate preview/add targets without a duplicate heading', () => {
   const props = fixture();
   props.snapshot.workspace.assets = [{id: 'art', name: 'existing_astronaut-reference.png', url: '/art.png'}];
   const html = renderToStaticMarkup(React.createElement(ArtworkPanel, props));
-  assert.doesNotMatch(html, /<h2[^>]*>Artwork<\/h2>|<details/);
+  assert.doesNotMatch(html, /<h2[^>]*>Artwork<\/h2>/);
   assert.match(html, /type="file"[^>]*aria-label="Import artwork"/);
   assert.match(html, /id="import-existing"/);
   assert.match(html, /aria-label="Preview existing_astronaut-reference.png"/);
@@ -265,4 +291,188 @@ test('image export stays distinct from automatic study saving', () => {
   assert.match(html, /id="save-image"[^>]*aria-label="Export image"/);
   assert.match(html, /class="save-label-compact" aria-hidden="true">Export</);
   assert.doesNotMatch(html, /Save reference/);
+});
+
+
+test('instrument empty study offers one clear artwork action without an empty layer bank', () => {
+  const props = fixture();
+  props.snapshot.study.tattoos = [];
+  props.snapshot.study.selectedIds = [];
+  const html = renderToStaticMarkup(React.createElement(CompositionPanel, {...props, instrument: true}));
+  assert.match(html, /Add artwork/);
+  assert.doesNotMatch(html, /Layer actions|Choose a tattoo|No tattoos added/);
+});
+
+test('save retry and conflict recovery stay enabled when only the preview is unavailable',()=>{
+ for(const storageMode of ['browser','server'])for(const text of ['Retry save','Resolve conflict'])for(const dataBlocked of [false,true]){
+  const props=withUI(fixture(),{blocked:true,dataBlocked,storageMode,ready:false,previewError:'Body could not render',saveError:true,saveLabel:'Not saved',retry:{hidden:false,text}});
+  const html=renderToStaticMarkup(React.createElement(StudyCard,props));
+  const retry=/<button\b[^>]*id="retry-save"[^>]*>/.exec(html)[0];
+  assert.equal(/\sdisabled(?:=""|(?=[\s>]))/.test(retry),dataBlocked,`${storageMode}: ${text} is blocked only by data transactions`);
+  assert.doesNotMatch(retry,/\shidden(?:=""|(?=[\s>]))/);
+ }
+});
+
+test('repeat import is available before every populated library and keeps preparation options before selection', () => {
+  for (const count of [0, 1, 8, 32]) {
+    const props = fixture();
+    props.snapshot.workspace.assets = Array.from({length: count}, (_, index) => ({id: `art-${index}`, name: `Artwork ${index}.png`, url: `/art-${index}.png`}));
+    const html = renderToStaticMarkup(React.createElement(ArtworkPanel, props));
+    assert.ok(html.indexOf('id="tattoo-upload"') < html.indexOf('id="art-search"'));
+    assert.ok(html.indexOf('id="import-existing"') < html.indexOf('id="artwork"'));
+    assert.match(html, /accept="image\/png,image\/webp" multiple=""/);
+    assert.match(html, /Transparent PNG or WebP/);
+    assert.match(html, /up to 20 MB/);
+    assert.equal((html.match(/id="tattoo-upload"/g) || []).length, 1);
+    if (count) assert.match(html, /<details class="import-guidance"><summary>Formats and existing tattoos<\/summary>/);
+  }
+});
+
+test('a failed save keeps one recoverable cause together with its retry while saving again', () => {
+  const props = withUI(fixture(), {saveLabel: 'Saving…', saveFailure: 'Storage is full.', saveError: true, dataBlocked: false, retry: {hidden: false, text: 'Retry save'}});
+  const html = renderToStaticMarkup(React.createElement(StudyCard, props));
+  assert.match(html, /class="save-recovery"[^>]*>[\s\S]*class="save-recovery-copy"[\s\S]*Storage is full\.[\s\S]*id="retry-save"/);
+  assert.equal((html.match(/id="retry-save"/g) || []).length, 1);
+  assert.ok(html.indexOf('class="save-recovery"') > html.indexOf('aria-label="Current study"'));
+  assert.match(html, /data-save-state="error"/);
+});
+
+test('Help is reachable directly from Study actions', () => {
+  const props = withUI(fixture(), {saveLabel: 'Saved', retry: {hidden: true, text: 'Retry save'}});
+  const html = renderToStaticMarkup(React.createElement(StudyCard, props));
+  assert.match(html, /id="help-open"[^>]*>Help and shortcuts/);
+  const calls = [];
+  props.app.actions.openDialog = dialog => calls.push(dialog);
+  const findHelp = node => node?.props?.id === 'help-open' ? node : React.Children.toArray(node?.props?.children).map(findHelp).find(Boolean);
+  const help = findHelp(StudyCard(props));
+  help.props.onClick({currentTarget: {closest: () => ({
+    removeAttribute(name) { assert.equal(name, 'open'); calls.push('menu closed'); },
+    querySelector: () => ({focus() { calls.push('summary focused'); }}),
+  })}});
+  assert.deepEqual(calls, ['menu closed', 'summary focused', 'help']);
+});
+
+test('both empty themes offer one artwork path without selection or layer material', () => {
+  for (const instrument of [false, true]) {
+    const html = renderToStaticMarkup(React.createElement(CompositionPanel, {...fixture(), instrument}));
+    assert.equal((html.match(/id="browse-art"/g) || []).length, 1);
+    assert.doesNotMatch(html, /id="selection-title"|id="layers"|No tattoos added/);
+  }
+});
+
+test('selection Detail remains a direct camera action when the inspector is expanded', () => {
+  const props = withUI(fixture(), {ready: true, panelState: 'expanded', currentView: 'body'});
+  props.snapshot.study.tattoos = [{id: 'one', name: 'Ink', assetId: 'art', width: 7, rotation: 0, visible: true}];
+  props.snapshot.study.selectedIds = ['one'];
+  const html = renderToStaticMarkup(React.createElement(CompositionPanel, props));
+  assert.match(html, /class="selection-focus"/);
+  assert.match(html, /id="selection-detail"[^>]*aria-pressed="false"/);
+  assert.ok(html.indexOf('id="selection-detail"') < html.indexOf('id="width"'));
+  assert.equal(CompositionPanel.compare(props, withUI(props, {currentView: 'detail'})), false);
+  assert.equal(CompositionPanel.compare(props, withUI(props, {ready: false})), false);
+});
+
+test('each primary group transform describes editable and excluded tattoos even with one editable selection', () => {
+  for (const editableCount of [1, 2]) {
+    const props = fixture();
+    props.snapshot.study.tattoos = Array.from({length: editableCount + 1}, (_, i) => ({id: `ink-${i}`, name: `Ink ${i}`, assetId: 'art', width: 7, rotation: 0, visible: true, locked: i === editableCount}));
+    props.snapshot.study.selectedIds = props.snapshot.study.tattoos.map(item => item.id);
+    const html = renderToStaticMarkup(React.createElement(CompositionPanel, props));
+    for (const id of ['width', 'rotation']) {
+      assert.match(html, new RegExp(`role="group"[^>]*aria-describedby="${id}-scope"`));
+      assert.match(html, new RegExp(`id="${id}-scope" class="[^"]*group-edit-scope[^\"]*">${editableCount} editable · 1 locked`));
+    }
+  }
+});
+
+
+test('preview recovery distinguishes unsaved work and keeps diagnostics secondary with data actions available', () => {
+  assert.equal(typeof PreviewRecovery, 'function', 'Preview failure needs a coherent recoverable presentation');
+  for (const hasUnsavedChanges of [false, true]) {
+    const props = withUI(fixture(), {previewError: 'Failed to fetch', loading: false, hasUnsavedChanges, dataBlocked: false, saveLabel: 'Saved in this browser'});
+    const html = renderToStaticMarkup(React.createElement(PreviewRecovery, props));
+    assert.match(html, /Preview unavailable/);
+    assert.match(html, /<details[^>]*>[\s\S]*Technical details[\s\S]*Failed to fetch/);
+    assert.match(html, /id="reload-app"[^>]*class="[^"]*primary/);
+    assert.match(html, /id="recover-workspace"/);
+    assert.ok(html.indexOf('id="reload-app"') < html.indexOf('id="recover-workspace"'));
+    if (hasUnsavedChanges) {
+      assert.match(html, /not saved/);
+      assert.doesNotMatch(html, /Your study is saved/);
+    } else assert.match(html, /Your study is saved/);
+  }
+});
+
+
+test('camera status suppresses duplicate save cause and never repeats stale preview loading status', () => {
+  const props = withUI(fixture(), {status: 'Storage is full.', saveFailure: 'Storage is full.'});
+  const failedSave = renderToStaticMarkup(React.createElement(CameraDock, props));
+  assert.doesNotMatch(failedSave, /Storage is full/);
+  assert.match(failedSave, /id="status"[^>]*hidden=""/);
+  const failedPreview = renderToStaticMarkup(React.createElement(CameraDock, withUI(props, {previewError: 'Failed to fetch', status: 'Opening your workspace…'})));
+  assert.match(failedPreview, /Preview unavailable/);
+  assert.doesNotMatch(failedPreview, /Opening your workspace|Failed to fetch/);
+  const placing = renderToStaticMarkup(React.createElement(CameraDock, withUI(props, {placing: true})));
+  assert.match(placing, /Tap visible skin/);
+  assert.match(placing, /id="stage-stop-placing"/);
+});
+
+
+test('preview recovery claims a saved study only after persistence and study identity are confirmed', () => {
+  for (const {studyPresent, saveLabel, saveError, saveFailure} of [
+    {studyPresent: false, saveLabel: 'Connecting…'},
+    {studyPresent: true, saveLabel: 'Connecting…'},
+    {studyPresent: false, saveLabel: 'Saved in this browser'},
+    {studyPresent: true, saveLabel: 'Saved in this browser', saveError: true, saveFailure: 'Quota full'},
+  ]) {
+    const props = withUI(fixture(), {previewError: 'Quota full', loading: false, hasUnsavedChanges: false, dataBlocked: false, saveLabel, saveError, saveFailure});
+    if (!studyPresent) props.snapshot.study = null;
+    const html = renderToStaticMarkup(React.createElement(PreviewRecovery, props));
+    assert.doesNotMatch(html, /Your study is saved|Some changes are not saved/, `${studyPresent ? 'Loaded study' : 'No study'} with ${saveLabel} has unconfirmed persistence`);
+    assert.match(html, /Backup and recovery options remain available/);
+    assert.match(html, /id="recover-workspace"/);
+    const backup = /<button[^>]*id="recover-workspace"[^>]*>/.exec(html)[0];
+    assert.doesNotMatch(backup, /\sdisabled(?:=""|(?=[\s>]))/);
+  }
+});
+
+
+test('preview recovery tracks live header expansion independently and disposes its layout subscription', t => {
+  assert.equal(typeof observeRecoveryHeaderBounds, 'function');
+  const properties = new Map(), listeners = new Map(), observers = [];
+  const root = {style: {setProperty: (key, value) => properties.set(key, value), removeProperty: key => properties.delete(key)}};
+  const header = {bottom: 106, getBoundingClientRect() { return {bottom: this.bottom}; }};
+  const study = {bottom: 106, getBoundingClientRect() { return {bottom: this.bottom}; }};
+  const globals = {
+    ResizeObserver: class {
+      constructor(callback) { this.callback = callback; this.targets = []; observers.push(this); }
+      observe(target) { this.targets.push(target); }
+      disconnect() { this.disconnected = true; }
+    },
+    window: {
+      addEventListener: (name, callback) => listeners.set(name, callback),
+      removeEventListener(name, callback) { assert.equal(listeners.get(name), callback); listeners.delete(name); },
+    },
+  };
+  for (const [name, value] of Object.entries(globals)) {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, name);
+    Object.defineProperty(globalThis, name, {value, configurable: true, writable: true});
+    t.after(() => previous ? Object.defineProperty(globalThis, name, previous) : delete globalThis[name]);
+  }
+  const dispose = observeRecoveryHeaderBounds(root, header, study);
+  assert.equal(properties.get('--recovery-header-bottom'), '106px', 'Initial bounds exist before renderer startup');
+  assert.deepEqual(observers[0].targets, [header, study]);
+  study.bottom = 204.5;
+  observers[0].callback();
+  assert.equal(properties.get('--recovery-header-bottom'), '204.5px', 'Expanded save recovery determines preview position');
+  study.bottom = 106;
+  observers[0].callback();
+  assert.equal(properties.get('--recovery-header-bottom'), '106px', 'Successful save releases the extra space');
+  header.bottom = 118;
+  listeners.get('resize')();
+  assert.equal(properties.get('--recovery-header-bottom'), '118px', 'Viewport resizing measures viewport coordinates again');
+  dispose();
+  assert.equal(observers[0].disconnected, true);
+  assert.equal(listeners.size, 0);
+  assert.equal(properties.has('--recovery-header-bottom'), false);
 });

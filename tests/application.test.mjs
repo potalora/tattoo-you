@@ -23,7 +23,7 @@ function hostNode() {
     removeChild(node) { this.children = this.children.filter(child => child !== node); node.parentNode = null; },
   };
 }
-function harness({full = false, extraStudy = false, initialGate, engineGate, deleteGate, failBackup = false, failRestore = false, update = async () => {}, dispose = () => {}} = {}) {
+function harness({full = false, extraStudy = false, initialGate, engineGate, deleteGate, initialQuality, qualityGate, failBackup = false, failRestore = false, beforePut = async () => {}, update = async () => {}, dispose = () => {}} = {}) {
   const study = project('Original study');
   study.notes = 'Original notes';
   const asset = {id: 'artwork', name: 'A rose', url: '/rose.png', width: 100, height: 150};
@@ -40,6 +40,7 @@ function harness({full = false, extraStudy = false, initialGate, engineGate, del
       return structuredClone(persisted);
     }
     if (path === 'workspace' && method === 'PUT') {
+      await beforePut(payload);
       persisted.projects = structuredClone(payload.projects);
       persisted.activeProjectId = payload.activeProjectId;
       return {revision: ++persisted.revision};
@@ -47,7 +48,7 @@ function harness({full = false, extraStudy = false, initialGate, engineGate, del
     if (path === 'assets/artwork' && method === 'DELETE') {
       if (deleteGate) await deleteGate.promise;
       persisted.assets = persisted.assets.filter(asset => asset.id !== 'artwork');
-      return {deleted: 'artwork'};
+      return {deleted: 'artwork', revision: ++persisted.revision};
     }
     if (path === 'assets' && method === 'POST') return {id: 'uploaded-artwork', url: '/new.png', ...payload};
     if (path === 'backup') {
@@ -73,7 +74,7 @@ function harness({full = false, extraStudy = false, initialGate, engineGate, del
       refreshLayout() { this.refreshed = (this.refreshed || 0) + 1; },
       setPlaceMode(value) { this.placing = value; },
       setLighting(value) { this.lighting.push(value); },
-      setQuality(value) { this.qualities.push(value); },
+      async setQuality(value) { this.qualities.push(value); if (qualityGate) await qualityGate.promise; },
       raytrace() { this.traces = (this.traces || 0) + 1; },
       cancelRaytrace() { this.cancelled = (this.cancelled || 0) + 1; },
       dispose() { this.disposed++; canvas.remove(); return dispose(this); },
@@ -87,7 +88,7 @@ function harness({full = false, extraStudy = false, initialGate, engineGate, del
     layouts.push(layout);
     return layout;
   };
-  const app = createApplication({createStudio, api, browser, observeLayout, clock,
+  const app = createApplication({createStudio, api, browser, observeLayout, clock, initialQuality,
     regions: [{id: 'leftUpperArm', label: 'Left upper arm'}],
     fileServices: {
       raster: async () => ({width: 100, height: 100, dataUrl: 'data:image/png;base64,test'}),
@@ -99,6 +100,47 @@ function harness({full = false, extraStudy = false, initialGate, engineGate, del
   const mount = async () => { const release = attach(); await until(() => app.getSnapshot().ui.ready, 'ready viewport'); return release; };
   return {app, host, attach, mount, persisted, study, asset, calls, engines, layouts, downloads, timers, browser};
 }
+
+test('explicit initial high quality is applied before rendering the study', async t => {
+  const qualityGate = deferred(), h = harness({initialQuality: 'high', qualityGate});
+  t.after(() => h.app.dispose());
+  assert.equal(h.app.getSnapshot().ui.quality, 'high');
+  h.attach();
+  await until(() => h.engines[0]?.qualities.length, 'initial quality application');
+  assert.deepEqual(h.engines[0].qualities, ['high']);
+  assert.equal(h.engines[0].updates.length, 0, 'quality resize must complete before study rendering');
+  qualityGate.resolve();
+  await until(() => h.app.getSnapshot().ui.ready);
+  assert.ok(h.engines[0].updates.length > 0);
+});
+
+test('high quality survives workspace reset and renderer recovery', async t => {
+  let broken = false;
+  const h = harness({initialQuality: 'high', update: async () => { if (broken) throw Error('GPU unavailable'); }});
+  t.after(() => h.app.dispose()); t.mock.method(console, 'error', () => {});
+  await h.mount();
+  await h.app.actions.restoreBackup({size: 100, text: async () => JSON.stringify({version: 3})});
+  assert.equal(h.app.getSnapshot().ui.quality, 'high');
+  broken = true;
+  h.attach(); await until(() => Boolean(h.app.getSnapshot().ui.error), 'failed replacement renderer');
+  broken = false;
+  await h.mount();
+  assert.equal(h.app.getSnapshot().ui.quality, 'high');
+  assert.deepEqual(h.engines.map(engine => engine.qualities), [['high'], ['high'], ['high']]);
+});
+
+test('default or invalid initial quality remains automatic and a later choice survives remount', async t => {
+  for (const initialQuality of [undefined, 'invalid']) {
+    const h = harness({initialQuality}); t.after(() => h.app.dispose());
+    await h.mount();
+    assert.equal(h.app.getSnapshot().ui.quality, 'auto');
+    assert.deepEqual(h.engines[0].qualities, ['auto']);
+    h.app.actions.setQuality('efficient');
+    await h.mount();
+    assert.equal(h.app.getSnapshot().ui.quality, 'efficient');
+    assert.deepEqual(h.engines[1].qualities, ['efficient']);
+  }
+});
 
 test('application snapshots are cached, deeply immutable copies and subscriptions unsubscribe', async t => {
   const h = harness(); t.after(() => h.app.dispose());
@@ -252,7 +294,7 @@ test('persisted domain actions update the workspace while UI changes keep one ca
   h.app.actions.setLighting('neutral'); h.app.actions.setQuality('efficient');
   assert.equal(h.engines.length, 1); assert.equal(h.host.children.length, 1); assert.equal(h.host.children[0], canvas);
   assert.equal(engine.updates.length, renders); assert.equal(engine.disposed, 0);
-  assert.deepEqual(engine.lighting, ['neutral']); assert.deepEqual(engine.qualities, ['efficient']);
+  assert.deepEqual(engine.lighting, ['neutral']); assert.deepEqual(engine.qualities, ['auto', 'efficient']);
   assert.equal(h.app.actions.addArtwork(h.asset.id), true);
   h.app.actions.renameLayer('My rose'); h.app.actions.editTattoo('width', 12); h.app.actions.endGesture('width');
   h.app.actions.setSkinColor('#ABCDEF'); h.app.actions.endGesture('skin-color');
@@ -349,7 +391,8 @@ test('replacement initialization clears a previously published viewport failure'
   const h = harness({update: async () => { if (++updates === 1) throw Error('Initial body failed'); }});
   t.after(() => h.app.dispose());
   h.attach(); await until(() => Boolean(h.app.getSnapshot().ui.error), 'published viewport failure');
-  assert.equal(h.app.getSnapshot().ui.saveError, true); assert.equal(h.app.getSnapshot().ui.loading, false);
+  assert.equal(h.app.getSnapshot().ui.saveError, false); assert.equal(h.app.getSnapshot().ui.loading, false);
+  assert.equal(h.app.getSnapshot().ui.previewError, 'Initial body failed', 'keep the original preview diagnostic');
   h.attach();
   const opening = h.app.getSnapshot();
   assert.equal(opening.ui.loading, true); assert.equal(opening.ui.error, ''); assert.equal(opening.ui.saveError, false);
@@ -384,6 +427,275 @@ test('backup failures appear in the open dialog and failed restores preserve the
   }
 });
 
+test('group reanchoring is rejected while single editable plus locked layers can place',async t=>{
+ const h=harness();t.after(()=>h.app.dispose());await h.mount();
+ h.app.actions.addArtwork(h.asset.id);h.app.actions.addArtwork(h.asset.id);h.app.actions.selectAll();
+ const before=h.app.getSnapshot().study.tattoos;
+ assert.equal(h.app.getSnapshot().selection?.canReanchor,false);
+ assert.equal(await h.app.actions.setRegion('leftUpperArm'),false);
+ h.app.actions.togglePlace();h.engines[0].options.onPlace({faceIndex:99,barycentric:[1,0,0]});
+ assert.deepEqual(h.app.getSnapshot().study.tattoos,before);
+ h.app.actions.layerAction(before[0].id,'locked');
+ assert.equal(h.app.getSnapshot().selection.canReanchor,true);
+ await h.app.actions.setRegion('leftUpperArm');
+ assert.deepEqual(h.app.getSnapshot().study.tattoos[0],{...before[0],locked:true});
+ assert.equal(h.app.getSnapshot().study.tattoos[1].placement.faceIndex,1);
+});
+
+test('preview failure preserves saved storage status and backup; retry recovers',async t=>{
+ t.mock.method(console,'error',()=>{});let broken=true;
+ const h=harness({update:async()=>{if(broken)throw Error('GPU failure');}});t.after(()=>h.app.dispose());
+ h.attach();await until(()=>!h.app.getSnapshot().ui.loading);
+ const failed=h.app.getSnapshot();assert.equal(failed.ui.saveError,false);assert.equal(failed.ui.saveLabel,'Saved in this browser');
+ assert.equal(failed.ui.hasUnsavedChanges,false);assert.match(failed.ui.status,/Preview unavailable/);assert.doesNotMatch(failed.ui.status,/Opening|saved study is safe/i);
+ assert.match(failed.ui.previewError,/rendered|GPU/);assert.equal(await h.app.actions.saveImage(),false);
+ await h.app.actions.exportBackup();assert.equal(h.downloads.length,1);
+ broken=false;await h.mount();assert.equal(h.app.getSnapshot().ui.previewError,'');
+});
+
+test('preview failure reports terminal status while retaining unsaved edits and the save cause',async t=>{
+ t.mock.method(console,'error',()=>{});let unavailable=false,broken=false;
+ const h=harness({beforePut:async()=>{if(unavailable)throw Error('Quota full');},update:async()=>{if(broken)throw Error('GPU unavailable');}});t.after(()=>h.app.dispose());await h.mount();
+ unavailable=true;h.app.actions.setNotes('Open edits');assert.equal(await h.app.flush(),false);
+ h.engines[0].options.onError(Error('Device lost'));
+ let failed=h.app.getSnapshot();assert.equal(failed.ui.hasUnsavedChanges,true);assert.equal(failed.ui.saveFailure,'Quota full');assert.match(failed.ui.status,/Preview unavailable/);assert.doesNotMatch(failed.ui.status,/saved study is safe|Opening/i);
+ broken=true;h.attach();await until(()=>!h.app.getSnapshot().ui.loading);
+ failed=h.app.getSnapshot();assert.equal(failed.study.notes,'Open edits');assert.equal(failed.ui.hasUnsavedChanges,true);assert.equal(failed.ui.saveFailure,'Quota full');assert.match(failed.ui.status,/Preview unavailable/);assert.match(failed.ui.previewError,/GPU unavailable/);
+});
+
+test('save cause and error survive later feedback, edits and pending retries until all edits persist',async t=>{
+ let mode='okay';const firstRetry=deferred(),secondRetry=deferred();let retryWrites=0;
+ const h=harness({beforePut:async()=>{if(mode==='fail')throw Error('Workspace unavailable');if(mode==='retry')await (++retryWrites===1?firstRetry:secondRetry).promise;}});t.after(()=>h.app.dispose());await h.mount();
+ h.app.actions.setNotes('First edit');assert.equal(h.app.getSnapshot().ui.hasUnsavedChanges,true);
+ mode='fail';assert.equal(await h.app.flush(),false);
+ h.app.actions.addArtwork(h.asset.id);h.app.actions.setNotes('Second edit');
+ let ui=h.app.getSnapshot().ui;assert.equal(ui.saveFailure,'Workspace unavailable');assert.equal(ui.saveError,true);assert.equal(ui.hasUnsavedChanges,true);assert.match(ui.status,/Added to study/);
+ mode='retry';const saving=h.app.actions.retrySave();await tick();
+ ui=h.app.getSnapshot().ui;assert.equal(ui.saveFailure,'Workspace unavailable');assert.equal(ui.saveError,true);assert.equal(ui.hasUnsavedChanges,true);assert.match(ui.saveLabel,/Unsaved/);assert.equal(ui.retry.hidden,false);
+ h.app.actions.setNotes('Newest edit');firstRetry.resolve();await until(()=>retryWrites===2);
+ ui=h.app.getSnapshot().ui;assert.equal(ui.saveFailure,'Workspace unavailable');assert.equal(ui.saveError,true);assert.equal(ui.hasUnsavedChanges,true);assert.doesNotMatch(ui.saveLabel,/^Saved/);
+ secondRetry.resolve();assert.equal(await saving,true);
+ ui=h.app.getSnapshot().ui;assert.equal(ui.saveFailure,'');assert.equal(ui.saveError,false);assert.equal(ui.hasUnsavedChanges,false);assert.equal(ui.retry.hidden,true);assert.equal(h.persisted.projects[0].notes,'Newest edit');
+});
+
+test('study naming requests identify creation, rename and a separate alternative',async t=>{
+ const h=harness();t.after(()=>h.app.dispose());await h.mount();
+ const before=h.app.getSnapshot().study;
+ for(const [action,label]of [['newProject','Create study'],['renameProject','Rename study'],['saveAlternative','Create alternative']]){
+  const pending=h.app.actions[action]();const request=h.app.getSnapshot().ui.nameRequest;
+  assert.equal(request.submitLabel,label);
+  if(action==='saveAlternative')assert.match(request.description,/original.*kept/i);
+  h.app.actions.resolveName(null);await pending;assert.deepEqual(h.app.getSnapshot().study,before);
+ }
+});
+
+test('empty and null-active restores immediately adopt a usable editable study',async t=>{
+ for(const empty of [true,false]){
+  const h=harness();t.after(()=>h.app.dispose());await h.mount();
+  h.persisted.activeProjectId=null;if(empty)h.persisted.projects=[];
+  assert.equal(await h.app.actions.restoreBackup({size:20,text:async()=>JSON.stringify({version:3})}),true);
+  assert.ok(h.app.getSnapshot().study);h.app.actions.editBody('stature',180);h.app.actions.endGesture('stature');
+  assert.equal(await h.app.flush(),true);assert.equal(h.persisted.projects[0].body.stature,180);
+  const creating=h.app.actions.newProject();h.app.actions.resolveName('New after restore');assert.equal(await creating,true);
+ }
+});
+
+test('mapping warnings persist across UI messages but clear with composition and study changes',async t=>{
+ const h=harness({extraStudy:true});t.after(()=>h.app.dispose());await h.mount();h.app.actions.addArtwork(h.asset.id);await tick();
+ const engine=h.engines[0];engine.options.onStats({warnings:['Seam crossing']});
+ h.app.actions.setNotes('Discuss fit');h.app.actions.openDialog('workspace');
+ assert.deepEqual(h.app.getSnapshot().ui.mappingWarnings,['Seam crossing']);
+ h.app.actions.layerAction(h.app.getSnapshot().study.tattoos[0].id,'visible');
+ assert.deepEqual(h.app.getSnapshot().ui.mappingWarnings,[]);
+ await h.app.actions.switchProject(h.persisted.projects[1].id);assert.deepEqual(h.app.getSnapshot().ui.mappingWarnings,[]);
+});
+
+test('invalid numeric gesture preserves redo, dirty state and selection',async t=>{
+ const h=harness();t.after(()=>h.app.dispose());await h.mount();
+ h.app.actions.editBody('stature',180);h.app.actions.endGesture('stature');h.app.actions.undo();await h.app.flush();
+ const before=h.app.getSnapshot();assert.equal(before.ui.canRedo,true);
+ assert.equal(h.app.actions.editBody('stature',999),false);
+ const after=h.app.getSnapshot();assert.deepEqual(after.study,before.study);assert.equal(after.ui.canRedo,true);
+ assert.equal(after.ui.canUndo,before.ui.canUndo);assert.equal(h.app.hasUnsavedChanges(),false);
+});
+
+test('new study at capacity rejects before requesting a name or mutating cameras',async t=>{
+ const h=harness();for(let i=1;i<100;i++)h.persisted.projects.push(project('Full '+i));
+ t.after(()=>h.app.dispose());await h.mount();const before=h.app.getSnapshot();
+ assert.equal(await h.app.actions.newProject(),false);const after=h.app.getSnapshot();
+ assert.equal(after.ui.nameRequest,null);assert.deepEqual(after.workspace,before.workspace);assert.equal(h.app.hasUnsavedChanges(),false);
+});
+
+test('committed empty restore renders adopted study and resets history despite initialization save failure',async t=>{
+ for(const conflict of [false,true]){
+  let rejectWrites=false;
+  const h=harness({beforePut:async()=>{
+   if(!rejectWrites)return;
+   if(conflict){const winner=project('Saved by other tab');h.persisted.projects=[winner];h.persisted.activeProjectId=winner.id;h.persisted.revision++;}
+   throw Object.assign(Error(conflict?'Revision conflict':'Quota full'),conflict?{status:409}:{});
+  }});t.after(()=>h.app.dispose());await h.mount();
+  h.app.actions.addArtwork(h.asset.id);await h.app.flush();await until(()=>!h.app.getSnapshot().ui.rendering);
+  assert.equal(h.app.getSnapshot().ui.canUndo,true);
+  h.persisted.projects=[];h.persisted.activeProjectId=null;rejectWrites=true;
+  assert.equal(await h.app.actions.restoreBackup({size:20,text:async()=>JSON.stringify({version:3})}),true);
+  const adopted=h.app.getSnapshot();assert.equal(adopted.study.name,'My first study');assert.equal(adopted.ui.canUndo,false);
+  assert.deepEqual(h.engines[0].updates.at(-1)[1],[], 'the new study owns the pixels before interaction returns');
+  assert.equal(adopted.ui.saveError,true);assert.equal(adopted.ui.ready,true);assert.equal(adopted.ui.previewError,'');
+  assert.match(adopted.ui.dataStatus,/restored.*not saved/i);assert.doesNotMatch(adopted.ui.dataStatus,/Backup did not complete/);
+  rejectWrites=false;assert.equal(await h.app.actions.retrySave(),true);
+  const recovered=h.app.getSnapshot();assert.equal(recovered.ui.saveError,false);
+  assert.equal(recovered.study.name,conflict?'Saved by other tab':'My first study');
+  assert.deepEqual(h.engines[0].updates.at(-1)[1],recovered.study.tattoos);
+ }
+});
+
+test('failed geometry update rejects retained decal warning telemetry until matching composition renders',async t=>{
+ t.mock.method(console,'error',()=>{});let fail=false;
+ const h=harness({update:async()=>{if(fail)throw Error('New geometry unavailable');}});t.after(()=>h.app.dispose());await h.mount();
+ h.app.actions.addArtwork(h.asset.id);await until(()=>!h.app.getSnapshot().ui.rendering);
+ const engine=h.engines[0],id=h.app.getSnapshot().study.tattoos[0].id;
+ engine.getMappingWarnings=()=>[{tattooId:id,message:'Warning from old geometry'}];
+ engine.options.onStats({mappingWarnings:engine.getMappingWarnings(),warnings:['Warning from old geometry']});
+ assert.deepEqual(h.app.getSnapshot().ui.mappingWarnings,['Warning from old geometry']);
+ fail=true;h.app.actions.editBody('stature',180);h.app.actions.endGesture('stature');await until(()=>!h.app.getSnapshot().ui.rendering);
+ assert.match(h.app.getSnapshot().ui.status,/Preview unavailable/);assert.equal(h.app.getSnapshot().ui.previewError,'New geometry unavailable');
+ assert.deepEqual(h.app.getSnapshot().ui.mappingWarnings,[]);
+ engine.options.onStats({mappingWarnings:engine.getMappingWarnings(),warnings:['Warning from old geometry']});
+ assert.deepEqual(h.app.getSnapshot().ui.mappingWarnings,[], 'old geometry must not qualify active-composition warnings');
+ assert.doesNotMatch(h.app.getSnapshot().ui.status,/Warning from old geometry/);
+ assert.equal(await h.app.actions.saveImage(),false);
+ fail=false;engine.getMappingWarnings=()=>[{tattooId:id,message:'Current geometry seam'}];await h.app.actions.chooseCamera('front');
+ assert.deepEqual(h.app.getSnapshot().ui.mappingWarnings,['Current geometry seam']);
+});
+
+test('conflict reload resets old preview and history when empty saved copy normalization cannot save',async t=>{
+ let mode='okay';
+ const h=harness({beforePut:async()=>{
+  if(mode==='conflict'){h.persisted.projects=[];h.persisted.activeProjectId=null;h.persisted.revision++;throw Object.assign(Error('Revision conflict'),{status:409});}
+  if(mode==='quota')throw Error('Quota full');
+ }});t.after(()=>h.app.dispose());await h.mount();h.app.actions.addArtwork(h.asset.id);await until(()=>!h.app.getSnapshot().ui.rendering);
+ mode='conflict';assert.equal(await h.app.flush(),false);assert.equal(h.app.getSnapshot().ui.canUndo,true);
+ mode='quota';assert.equal(await h.app.actions.retrySave(),true);
+ const adopted=h.app.getSnapshot();assert.equal(adopted.study.name,'My first study');assert.equal(adopted.ui.canUndo,false);
+ assert.equal(adopted.ui.saveError,true);assert.match(adopted.ui.dataStatus,/Saved copy loaded.*not saved/);
+ assert.deepEqual(h.engines[0].updates.at(-1)[1],[]);
+ mode='okay';assert.equal(await h.app.actions.retrySave(),true);assert.equal(h.app.getSnapshot().ui.saveError,false);
+});
+
+test('committed restore with failed save and failed new preview blocks editing until preview recovery',async t=>{
+ t.mock.method(console,'error',()=>{});let failing=false;
+ const h=harness({beforePut:async()=>{if(failing)throw Error('Quota full');},update:async()=>{if(failing)throw Error('Replacement preview failed');}});
+ t.after(()=>h.app.dispose());await h.mount();h.app.actions.addArtwork(h.asset.id);await h.app.flush();await until(()=>!h.app.getSnapshot().ui.rendering);
+ h.persisted.projects=[];h.persisted.activeProjectId=null;failing=true;
+ assert.equal(await h.app.actions.restoreBackup({size:20,text:async()=>JSON.stringify({version:3})}),true);
+ assert.equal(h.app.getSnapshot().ui.ready,false);assert.match(h.app.getSnapshot().ui.previewError,/Replacement preview failed/);
+ assert.equal(h.app.actions.editBody('stature',180),false);assert.equal(await h.app.actions.saveImage(),false);
+ failing=false;await h.mount();assert.equal(h.app.getSnapshot().ui.previewError,'');
+ assert.equal(h.app.getSnapshot().study.name,'My first study');assert.deepEqual(h.engines.at(-1).updates.at(-1)[1],[]);
+ assert.equal(await h.app.actions.retrySave(),true);
+});
+
+test('camera setup failure after committed restore blocks old pixels and reports committed data',async t=>{
+ const h=harness();t.after(()=>h.app.dispose());await h.mount();h.persisted.projects=[];h.persisted.activeProjectId=null;
+ h.engines[0].view=()=>{throw Error('Camera unavailable');};
+ assert.equal(await h.app.actions.restoreBackup({size:20,text:async()=>JSON.stringify({version:3})}),true);
+ assert.equal(h.app.getSnapshot().ui.ready,false);assert.match(h.app.getSnapshot().ui.previewError,/Camera unavailable/);
+ assert.match(h.app.getSnapshot().ui.dataStatus,/restored.*Preview could not load/);assert.equal(await h.app.actions.saveImage(),false);
+});
+
+test('successful retry clears only the current save failure status and preserves newer feedback',async t=>{
+ for(const newer of ['none','placement','mapping','action']){
+  let unavailable=false;const h=harness({beforePut:async()=>{if(unavailable)throw Error('Browser storage unavailable. Your edits are still open; retry when it returns.');}});
+  t.after(()=>h.app.dispose());await h.mount();h.app.actions.addArtwork(h.asset.id);await until(()=>!h.app.getSnapshot().ui.rendering);
+  unavailable=true;assert.equal(await h.app.flush(),false);assert.match(h.app.getSnapshot().ui.status,/Browser storage unavailable/);
+  if(newer==='placement')h.app.actions.togglePlace();
+  if(newer==='mapping')h.engines[0].options.onStats({warnings:['Current seam limitation']});
+  if(newer==='action')h.app.actions.addArtwork(h.asset.id);
+  const message=h.app.getSnapshot().ui.status;unavailable=false;assert.equal(await h.app.actions.retrySave(),true);
+  assert.equal(h.app.getSnapshot().ui.saveError,false);
+  if(newer==='none')assert.doesNotMatch(h.app.getSnapshot().ui.status,/Browser storage unavailable/);
+  else assert.equal(h.app.getSnapshot().ui.status,message);
+ }
+});
+
+test('compact placement reveals canvas and restores the previous inspector state on every exit',async t=>{
+ const {COMPACT_LAYOUT_QUERY}=await import('../studio/viewport-layout.js');
+ for(const previous of ['normal','expanded','collapsed'])for(const exit of ['stop','escape','selection','locked','multi','study']){
+  const h=harness({extraStudy:true});t.after(()=>h.app.dispose());await h.mount();
+  h.browser.matchMedia=query=>{assert.equal(query,COMPACT_LAYOUT_QUERY);return {matches:true};};
+  h.app.actions.addArtwork(h.asset.id);h.app.actions.addArtwork(h.asset.id);
+  const [first,second]=h.app.getSnapshot().study.tattoos;
+  h.app.actions.setPanelState(previous);h.app.actions.togglePlace();
+  assert.equal(h.app.getSnapshot().ui.placing,true);assert.equal(h.app.getSnapshot().ui.panelState,'collapsed');
+  if(exit==='stop'||exit==='escape')h.app.actions.stopPlacing(); // Escape routes to this same action in the UI owner.
+  if(exit==='selection'){h.app.actions.selectLayer(second.id,false);h.app.actions.selectLayer(first.id,true);}
+  if(exit==='locked')h.app.actions.layerAction(second.id,'locked');
+  if(exit==='multi')h.app.actions.selectAll();
+  if(exit==='study')await h.app.actions.switchProject(h.app.getSnapshot().workspace.projects[1].id);
+  assert.equal(h.app.getSnapshot().ui.placing,false,exit);assert.equal(h.app.getSnapshot().ui.panelState,previous,exit);
+ }
+});
+
+test('side-panel placement leaves inspector geometry unchanged',async t=>{
+ const h=harness();t.after(()=>h.app.dispose());await h.mount();h.browser.matchMedia=()=>({matches:false});
+ h.app.actions.addArtwork(h.asset.id);h.app.actions.setPanelState('expanded');h.app.actions.togglePlace();
+ assert.equal(h.app.getSnapshot().ui.panelState,'expanded');h.app.actions.stopPlacing();assert.equal(h.app.getSnapshot().ui.panelState,'expanded');
+});
+
+test('placement follows sheet rotation and never overwrites the original inspector stop',async t=>{
+ const {COMPACT_LAYOUT_QUERY}=await import('../studio/viewport-layout.js');
+ for(const startsCompact of [false,true])for(const previous of ['normal','expanded','collapsed']){
+  const h=harness();t.after(()=>h.app.dispose());await h.mount();
+  const media=new EventTarget();media.matches=startsCompact;let added=0,removed=0;
+  const add=media.addEventListener.bind(media),remove=media.removeEventListener.bind(media);
+  media.addEventListener=(...args)=>{added++;add(...args);};media.removeEventListener=(...args)=>{removed++;remove(...args);};
+  h.browser.matchMedia=query=>{assert.equal(query,COMPACT_LAYOUT_QUERY);return media;};
+  h.app.actions.addArtwork(h.asset.id);h.app.actions.setPanelState(previous);h.app.actions.togglePlace();
+  assert.equal(h.app.getSnapshot().ui.panelState,startsCompact?'collapsed':previous,'entry uses actual layout without replacing original stop');
+  const study=h.app.getSnapshot().study;
+  for(let cycle=0;cycle<2;cycle++){
+   media.matches=true;media.dispatchEvent(new Event('change'));
+   assert.equal(h.app.getSnapshot().ui.placing,true);assert.equal(h.app.getSnapshot().ui.panelState,'collapsed','rotating into portrait exposes the stage');
+   assert.equal(h.app.actions.setPanelState('expanded'),false,'direct expansion is rejected while placing');
+   assert.equal(h.app.actions.togglePanel(),false,'Controls cannot reopen the sheet while placing');
+   h.app.actions.showSurface('body');assert.equal(h.app.getSnapshot().ui.panelState,'collapsed','surface navigation cannot reopen it');
+   assert.equal(h.app.getSnapshot().study,study,'layout reconciliation does not mutate study/history');
+   media.matches=false;media.dispatchEvent(new Event('change'));
+   assert.equal(h.app.getSnapshot().ui.panelState,previous,'side layout recovers original stop without replacing it');
+  }
+  media.matches=true;media.dispatchEvent(new Event('change'));h.app.actions.stopPlacing();
+  assert.equal(h.app.getSnapshot().ui.panelState,previous,'Stop restores the first entry stop');assert.equal(added,1);assert.equal(removed,1);
+  media.matches=false;media.dispatchEvent(new Event('change'));assert.equal(h.app.getSnapshot().ui.panelState,previous,'ended placement has no live media observer');
+  h.app.actions.togglePlace();h.app.dispose();assert.equal(removed,2,'disposing active placement removes its media listener');
+ }
+});
+
+test('disposing during an in-flight composition render ignores late warning adoption',async t=>{
+ const pending=deferred();let waitForRender=false,warningReads=0;
+ const errors=[];t.mock.method(console,'error',(...args)=>errors.push(args));
+ const h=harness({update:async()=>{if(waitForRender)await pending.promise;}});t.after(()=>h.app.dispose());await h.mount();
+ h.engines[0].getMappingWarnings=()=>{warningReads++;return [{tattooId:'old',message:'Disposed geometry warning'}];};
+ waitForRender=true;h.app.actions.addArtwork(h.asset.id);await until(()=>h.app.getSnapshot().ui.rendering);
+ h.app.dispose();pending.resolve();await until(()=>!h.app.getSnapshot().ui.rendering);
+ assert.deepEqual(errors,[], 'renderer disposal must not report a late composition callback as a preview failure');
+ assert.equal(warningReads,0, 'late completion must not inspect a disposed renderer');
+ assert.equal(h.app.getSnapshot().ui.ready,false);assert.equal(h.app.getSnapshot().ui.blocked,true);
+ assert.deepEqual(h.app.getSnapshot().ui.mappingWarnings,[]);
+});
+
+test('storage retry and conflict recovery work after empty restore save and replacement preview both fail',async t=>{
+ t.mock.method(console,'error',()=>{});
+ for(const conflict of [false,true]){
+  let failSave=false,failPreview=false;
+  const h=harness({beforePut:async()=>{if(failSave)throw Object.assign(Error(conflict?'Revision conflict':'Quota full'),conflict?{status:409}:{});},update:async()=>{if(failPreview)throw Error('Replacement body unavailable');}});
+  t.after(()=>h.app.dispose());await h.mount();h.app.actions.addArtwork(h.asset.id);await h.app.flush();await until(()=>!h.app.getSnapshot().ui.rendering);
+  h.persisted.projects=[];h.persisted.activeProjectId=null;failSave=true;failPreview=true;
+  assert.equal(await h.app.actions.restoreBackup({size:20,text:async()=>JSON.stringify({version:3})}),true);
+  const failed=h.app.getSnapshot();assert.equal(failed.ui.ready,false);assert.equal(failed.ui.blocked,true);assert.equal(failed.ui.dataBlocked,false);assert.equal(failed.ui.saveError,true);assert.equal(failed.ui.retry.hidden,false);assert.match(failed.ui.previewError,/Replacement body unavailable/);
+  failSave=false;assert.equal(await h.app.actions.retrySave(),true,'storage recovery does not require a working preview');
+  assert.equal(h.app.getSnapshot().ui.saveError,false);assert.equal(h.app.getSnapshot().ui.dataBlocked,false);
+ }
+});
 
 test('pending artwork deletion blocks edits and successful deletion clears history that could restore it', async t => {
   const gate = deferred(), h = harness({deleteGate: gate});

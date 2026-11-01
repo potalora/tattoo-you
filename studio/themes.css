@@ -18,13 +18,12 @@
   --type-heading: 16px; --type-control: 14px; --type-caption: 12px;
   /* Local luminosity compression keeps dark ink legible over the room.
      These CSS values approximate Apple's regular-glass principles. */
-  --surface-fill: #f5f7f03d; --surface-fallback: #f0f3ecfa;
+  --surface-fill: transparent; --surface-fallback: #f0f3ecfa;
   --surface-blur: 10px;
-  --surface-filter: blur(var(--surface-blur)) saturate(1.08) contrast(.42) brightness(1.35);
-  --surface-shadow: inset 0 1px 1px #ffffffcf, inset 0 -1px 1px #ffffff38, 0 0 0 1px #172d2124, 0 8px 28px #172d2117, 0 1px 3px #172d211c;
-  --menu-fill: #f2f5ed66; --camera-fill: #f5f7f047; --history-fill: #f8faf50d;
+  --surface-shadow: 0 8px 28px #172d2117;
+  --menu-fill: transparent; --camera-fill: transparent; --history-fill: transparent;
   --field-border: #25372f45;
-  --field-fill: #ffffff24; --hover-fill: #ffffff33; --active-fill: #ffffff52;
+  --field-fill: transparent; --hover-fill: #25372f0a; --active-fill: #25372f12;
   --selection-fill: #52766c10; --action-fill: #405e53; --action-ink: #f8faf5;
   --action-hover: #314e43; --range-track: #25372fcc; --range-thumb: #243c30;
   --paper-radius: 6px; --camera-radius: 16px;
@@ -76,7 +75,6 @@ html[data-theme] #project-select { background: transparent; }
 html[data-theme] :is(.primary, .save-image) { background: var(--action-fill); color: var(--action-ink); border-color: transparent; }
 html[data-theme] .camera-bar button[aria-pressed=true] { background: var(--action-fill); color: var(--action-ink); border-color: transparent; }
 html[data-theme] :is(.primary, .save-image):not(:disabled):hover { background: var(--action-hover); color: var(--action-ink); }
-html[data-theme] #browse-art:not(:disabled):hover { color: var(--action-ink); }
 html[data-theme] .secondary { background: var(--field-fill); }
 html[data-theme] .secondary:not(:disabled):hover { background: var(--hover-fill); }
 html[data-theme] :is(.layer.selected, .placement-action[aria-pressed=true], .upload.dragging, .library-import[open]) { background: var(--selection-fill); }
@@ -98,8 +96,13 @@ html[data-theme] .controls-scroll::-webkit-scrollbar-thumb { background: var(--e
 html[data-theme] :is(.project-actions, .layer-menu-content, .preview-menu-content, .select-popup) { --surface-fill: var(--menu-fill,var(--panel)); border-radius: var(--control-radius); }
 
 /* The wordmark is editorial; working labels stay compact and calm. */
+html[data-theme=glass] .studio-wordmark { text-shadow: 0 0 2px #f5f7f0e6, 0 1px 5px #f5f7f0b3; }
 html[data-theme=glass] :is(input[type=text],input[type=search],input:not([type]),select,textarea) { border-color: var(--field-border); }
-html[data-theme=glass] .glass-surface { text-shadow: none; }
+html[data-theme=glass] .glass-surface {
+  border: 0; text-shadow: none;
+  /* Resolve this on each surface so compact and popup blur overrides apply. */
+  --surface-filter: blur(var(--surface-blur)) saturate(1.08) contrast(.42) brightness(1.35);
+}
 html[data-theme=glass] :is(.study-card,.header-right,.camera-bar) { --surface-blur: 6px; }
 html[data-theme=glass] :is(.select-popup,.project-actions,.layer-menu-content,.preview-menu-content) { --surface-blur: 14px; border-radius: var(--menu-radius); }
 html[data-theme=glass] :is(.select-list,.project-actions,.layer-menu-content,.preview-menu-content) { padding: var(--menu-padding); }
@@ -108,14 +111,18 @@ html[data-theme=glass] .camera-bar { padding: var(--camera-padding); }
 html[data-theme=glass] .camera-bar button { border-radius: calc(var(--camera-radius) - var(--camera-padding) - 1px); }
 html[data-theme=glass] .save-image { min-width: 140px; border: 1px solid #ffffff80; border-radius: var(--radius); box-shadow: 0 1px 3px #172d2129; padding-inline: 18px; }
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  /* A sibling backplate lets the study menu sample the room, rather than
-     being trapped inside its parent's backdrop-filter compositing root. */
-  html[data-theme=glass] .study-card { background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; z-index: 0; }
-  html[data-theme=glass] .study-card::before { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: inherit; background: var(--surface-fill); -webkit-backdrop-filter: var(--surface-filter); backdrop-filter: var(--surface-filter); }
+  /* Put the material behind content so nested menus can blur what is beneath
+     them without being trapped inside a parent's backdrop-filter root. */
+  html[data-theme=glass] :is(.study-card,.controls-panel,.artwork-preview) { background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  html[data-theme=glass] .study-card { z-index: 0; }
+  html[data-theme=glass] :is(.study-card,.controls-panel,.artwork-preview)::before { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: inherit; background: var(--surface-fill); -webkit-backdrop-filter: var(--surface-filter); backdrop-filter: var(--surface-filter); }
 }
+/* Scroll the contents without moving the preview's glass perimeter. */
+html[data-theme=glass] .artwork-preview { overflow: hidden; }
+html[data-theme=glass] .artwork-preview-content { max-height: inherit; overflow: auto; overscroll-behavior: contain; }
 html[data-theme=glass] .select-trigger { border-color: var(--field-border); border-radius: var(--control-radius); box-shadow: none; }
 html[data-theme=glass] #project-select { border-color: transparent; box-shadow: none; border-radius: 8px; }
-html[data-theme=glass] .select-trigger[data-popup-open] { background: #ffffff40; }
+html[data-theme=glass] .select-trigger[data-popup-open] { background: var(--active-fill); }
 html[data-theme=glass] :is(button,input,select):disabled { opacity: .55; }
 html[data-theme=glass] .brand {
   font-family: var(--display-serif); font-weight: 500; font-variation-settings: normal;
@@ -125,7 +132,16 @@ html[data-theme=glass] .brand { font-size: var(--wordmark-size); }
 html[data-theme=glass] .study-card { padding: 3px 6px 3px 14px; gap: 8px; }
 html[data-theme=glass] .study-picker { width: 152px; padding-left: 0; border: 0; }
 html[data-theme=glass] #project-select { font-size: 16px; font-weight: 500; }
-html[data-theme=glass] .study-save { width: 14px; flex: none; }
+/* Storage is a second line below the study name, leaving its hit target whole. */
+html[data-theme=glass] #project-select { padding-block: 2px 16px; }
+html[data-theme=glass] .study-card .study-save { position: absolute; left: 16px; bottom: 6px; width: auto; max-width: calc(100% - 72px); flex-wrap: nowrap; gap: 4px; line-height: 1; pointer-events: none; }
+html[data-theme=glass] .study-card .storage-scope { flex-basis: auto; }
+html[data-theme=glass] .study-card:has(.save-recovery:not([hidden])) .study-save { top: 34px; bottom: auto; }
+html[data-theme=glass] .save-recovery { padding-inline: 2px; }
+@media (min-width: 701px) {
+  html[data-theme=glass] .study-card:has(.save-recovery:not([hidden])) { width: min(420px,calc(50% - 110px)); }
+  html[data-theme=glass] .study-card:has(.save-recovery:not([hidden])) .study-picker { flex: 1; }
+}
 html[data-theme=glass] .study-save .save-status-short { display: none; }
 html[data-theme=glass] .study-save > svg { display: block; width: 14px; height: 14px; }
 html[data-theme=glass] .project-menu > summary { letter-spacing: 0; }
@@ -133,7 +149,7 @@ html[data-theme=glass] .project-actions { width: 208px; }
 html[data-theme=glass] .project-actions .menu-history { display: flex; gap: 4px; border-top: 1px solid var(--line); margin-top: 4px; padding-top: 4px; }
 html[data-theme=glass] .project-actions .menu-history button { display: flex; align-items: center; justify-content: flex-start; gap: 8px; flex: 1; width: auto; }
 html[data-theme=glass] .menu-divider { height: 1px; background: var(--line); margin: 4px 7px; }
-html[data-theme=glass] .study-save[data-save-state=error] { background: var(--panel); border-radius: 6px; padding: 3px 5px; }
+html[data-theme=glass] .study-save[data-save-state=error] { color: var(--danger); }
 html[data-theme=glass] :is(.composition-heading h2,.library-intro h2,.section-heading > h2,[data-panel-content=body] > h2,.panel-intro h2,.loading h2) { font-family: var(--sans); font-size: var(--type-heading); font-weight: 600; line-height: 1.4; letter-spacing: 0; }
 html[data-theme=glass] :is(dialog h2,.ui-dialog h2,.preview-heading h2) { font-family: var(--sans); font-size: 20px; font-weight: 600; line-height: 1.3; letter-spacing: -.015em; }
 html[data-theme=glass] h3 { font-size: var(--type-control); font-weight: 600; }
@@ -147,8 +163,17 @@ html[data-theme=glass] .surface-tabs button { font-size: 13px; font-weight: 500;
 html[data-theme=glass] .surface-tabs button[aria-pressed=true] { font-weight: 600; }
 html[data-theme=glass] .surface-tabs button:not(:disabled):is(:hover,:active) { background: transparent; color: var(--text); }
 html[data-theme=glass] :is(.primary,.save-image) { border: 1px solid var(--action-fill); font-weight: 500; text-shadow: none; }
+html[data-theme=glass] :is(.primary,.save-image):not(:disabled):is(:hover,:active) { background: var(--action-hover); color: var(--action-ink); }
 html[data-theme=glass] .secondary { background: var(--field-fill); border-color: var(--field-border); box-shadow: none; font-weight: 500; }
-html[data-theme=glass] .secondary:not(:disabled):hover { background: var(--hover-fill); border-color: #ffffffb3; }
+html[data-theme=glass] .secondary:not(:disabled):hover { background: var(--hover-fill); border-color: var(--field-border); }
+html[data-theme=glass] .selection-focus > button { background: var(--action-fill); color: var(--action-ink); border-color: var(--action-fill); text-shadow: none; }
+html[data-theme=glass] .selection-focus > button:not(:disabled):hover { background: var(--action-hover); color: var(--action-ink); }
+html[data-theme=glass] .selection-focus > button[aria-pressed=true] { box-shadow: inset 0 -3px 0 var(--action-ink); }
+html[data-theme=glass] .placement-action { position: relative; min-width: 150px; padding-right: 24px; }
+html[data-theme=glass] .placement-action[aria-pressed=true] { background: var(--action-fill); color: var(--action-ink); border-color: var(--action-fill); }
+html[data-theme=glass] .placement-action[aria-pressed=true]:not(:disabled):is(:hover,:active) { background: var(--action-hover); color: var(--action-ink); border-color: var(--action-hover); }
+/* A persistent check keeps placement recognizable without relying on color. */
+html[data-theme=glass] .placement-action[aria-pressed=true]::after { content: ''; position: absolute; top: 4px; right: 5px; width: 5px; height: 9px; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg); pointer-events: none; }
 html[data-theme=glass] #help-open { background: transparent; border: 1px solid transparent; font-weight: 400; }
 html[data-theme=glass] .field { gap: 6px; margin-block: 12px; }
 html[data-theme=glass] .placement-row .field { margin: 0; }
@@ -182,12 +207,14 @@ html[data-theme=glass] :where(button,a,input,select,textarea,summary):focus-visi
   outline: 2px solid var(--text); outline-offset: 2px;
 }
 html[data-theme=glass] :is(input,textarea,.select-trigger):focus-visible { border-color: transparent; box-shadow: none; }
+/* Static initial focus keeps short Help dialogs at their heading. */
+html[data-theme=glass] #help-dialog-title:focus { outline: none; }
 html[data-theme=glass] .camera-bar button[aria-pressed=true] { background: var(--action-fill); color: var(--action-ink); font-weight: 500; text-shadow: none; }
 html[data-theme=glass] :is(dialog,.ui-dialog,.loading) { --surface-fill: var(--menu-fill); }
 html[data-theme=glass] :is(dialog,.ui-dialog) { --surface-blur: 14px; border-radius: var(--radius); }
 html[data-theme=glass] :is(.interaction-hint,footer) { color: var(--text); text-shadow: 0 1px 3px #f5f7f0dd; }
 html[data-theme=glass] .stage { background: var(--bg); }
-html[data-theme=glass]:has(.controls-panel[data-lighting]:not([data-lighting=studio])) { --surface-fill: #f5f7f0c2; --camera-fill: #f5f7f0cc; --menu-fill: #f2f5eddb; }
+html[data-theme=glass]:has(.controls-panel[data-lighting]:not([data-lighting=studio])) .glass-surface { --surface-filter: blur(var(--surface-blur)) saturate(1.08) contrast(.32) brightness(1.6); }
 html[data-theme=glass]:has(.controls-panel[data-lighting]:not([data-lighting=studio])) :is(.interaction-hint,footer) { color: #f5f7f0; text-shadow: 0 1px 3px #172d21; }
 html[data-theme=glass] .layer { border-radius: 6px; }
 html[data-theme=glass] .layer-title { font-size: 14px; }
@@ -197,16 +224,22 @@ html[data-theme=glass] .artwork { gap: 20px 12px; }
 html[data-theme=glass] .art-card strong { font-weight: 500; }
 /* Preview and add have separate, aligned targets; filenames never make tiles. */
 html[data-theme=glass] .artwork { grid-template-columns: minmax(0,1fr); gap: 0; margin-top: 12px; }
-html[data-theme=glass] .art-card { display: grid; grid-template-columns: minmax(0,1fr) 44px; align-items: center; gap: 8px; padding-block: 8px; border-bottom: 1px solid var(--line); content-visibility: auto; contain-intrinsic-size: auto 88px; }
+html[data-theme=glass] .art-card { display: grid; grid-template-columns: minmax(0,1fr) 60px; align-items: center; gap: 8px; padding-block: 8px; border-bottom: 1px solid var(--line); content-visibility: auto; contain-intrinsic-size: auto 88px; }
 html[data-theme=glass] .art-card:last-child { border-bottom: 0; }
 html[data-theme=glass] .art-card .preview-art { display: grid; grid-template-columns: 64px minmax(0,1fr); gap: 12px; align-items: center; border-radius: 8px; }
 html[data-theme=glass] .art-card .art-paper { width: 64px; height: 72px; border-radius: 8px; }
 html[data-theme=glass] .art-card .art-paper img { inset: 7px; width: calc(100% - 14px); height: calc(100% - 14px); }
 html[data-theme=glass] .art-card strong { margin: 0; min-height: 0; text-align: left; font-weight: 400; line-height: 1.45; overflow-wrap: anywhere; }
-html[data-theme=glass] .art-card .add-art { position: static; width: 44px; height: 44px; border-radius: var(--control-radius); }
+html[data-theme=glass] .art-card .add-art { position: static; width: 60px; height: 44px; border-radius: var(--control-radius); }
 html[data-theme=glass] .art-card .add-art:not(:disabled):hover { background: var(--hover-fill); }
-html[data-theme=glass] input[type=range]::-webkit-slider-thumb { border-color: #f5f7f0; }
-html[data-theme=glass] input[type=range]::-moz-range-thumb { border-color: #f5f7f0; }
+html[data-theme=glass] .art-card .add-art:not(:disabled):hover span { background: transparent; color: inherit; }
+/* Keep keyboard outlines inside the card's paint containment. */
+html[data-theme=glass] .art-card :is(.preview-art,.add-art):focus-visible { outline-offset: -2px; }
+html[data-theme=glass] input[type=range]::-webkit-slider-thumb { border: 0; }
+html[data-theme=glass] input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border: 0; }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  html[data-theme=glass] button.glass-surface { --hover-fill: var(--surface-fallback); --active-fill: var(--surface-fallback); }
+}
 
 /* Precision: lower contrast in type weight, sharper edges, tighter rhythm. */
 html[data-theme=precision] body { font-size: 13px; }
@@ -275,8 +308,9 @@ html[data-theme=soft] .preview-paper { background: #ffffff; }
   html[data-theme=gallery] .brand { font-size: 29px; }
   html[data-theme=glass] .controls-scroll { padding: 14px 16px 20px; }
   html[data-theme=glass] #tattoo-controls .range-control { margin-block: 5px; row-gap: 0; }
+  html[data-theme=glass] #tattoo-controls .primary-transform .range-control { margin-block: 0; }
   html[data-theme=glass] .surface-tabs { padding-inline: 16px 8px; gap: 8px; }
-  :root[data-theme=glass] { --camera-padding: 3px; }
+  :root[data-theme=glass] { --camera-padding: 3px; --expanded-height: min(max(calc(var(--sheet-height) + 48px),49dvh),calc(100dvh - var(--header-height) - 160px)); }
   html[data-theme=glass] .surface-tabs button { font-size: 12px; }
   html[data-theme=glass] .save-image { min-width: 52px; width: 52px; padding-inline: 0; }
   html[data-theme=glass] :is(input[type=text],input[type=search],input:not([type]),textarea,.select-trigger,.select-option) { font-size: 16px; }
@@ -284,25 +318,56 @@ html[data-theme=soft] .preview-paper { background: #ffffff; }
   html[data-theme=glass] .brand { font-size: 25px; }
   html[data-theme=glass] #project-select { font-size: 16px; }
   html[data-theme=glass] .study-card { padding-left: 10px; gap: 4px; }
+  html[data-theme=glass] .masthead:has(.save-recovery:not([hidden])) { padding-top: 46px; align-items: flex-start; }
   html[data-theme=glass] .study-picker { width: auto; margin-left: 0; }
-  html[data-theme=glass] .study-save { width: 12px; }
   html[data-theme=glass] .study-save > svg { width: 12px; height: 12px; }
   html[data-theme=glass] .brand { font-size: 24px; }
 }
 @media (max-width: 360px) { html[data-theme=glass] .brand { font-size: 22px; } }
+/* Short landscape uses a side inspector; the shared layout contract also
+   keeps camera framing and sheet motion out of portrait-sheet mode here. */
+@media (max-width: 700px) and (max-height: 500px) and (orientation: landscape) {
+  :root[data-theme=glass] { --header-height: 44px; --workspace-gap: 8px; --pane-width: 280px; --panel-top: 64px; }
+  html[data-theme=glass] .masthead { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 8px; }
+  html[data-theme=glass] .masthead:has(.save-recovery:not([hidden])) { padding-top: 0; }
+  html[data-theme=glass] .masthead > :is(.study-card,.header-right) { height: 44px; }
+  html[data-theme=glass] .studio-wordmark { position: static; translate: none; font-size: 30px; line-height: 1; }
+  html[data-theme=glass] .study-card { width: 100%; max-width: 252px; padding-block: 0; }
+  html[data-theme=glass] .header-right { justify-self: end; }
+  html[data-theme=glass] #project-select { font-size: 14px; }
+  html[data-theme=glass] .save-image { width: 44px; min-width: 44px; padding: 8px; }
+  html[data-theme=glass] .controls-panel[data-panel-state] { top: 64px; bottom: 8px; left: auto; right: 8px; width: var(--pane-width); height: auto; max-height: calc(100dvh - 72px); }
+  html[data-theme=glass] :is(.sheet-drag-handle,#controls-toggle) { display: none; }
+  html[data-theme=glass] .controls-top { display: block; }
+  html[data-theme=glass] .controls-panel[data-panel-state] .controls-scroll { display: block; padding: 12px 14px 16px; }
+  html[data-theme=glass] .surface-tabs { padding-inline: 12px; }
+  html[data-theme=glass] .surface-tabs button { min-height: 44px; }
+  html[data-theme=glass] .placement-row .field { grid-template-columns: minmax(0,1fr); }
+  html[data-theme=glass] .workspace:has(.controls-panel[data-panel-state]) .stage-bottom { left: 8px; right: calc(var(--pane-width) + 24px); bottom: 8px; }
+  html[data-theme=glass] .stage-bottom #status { position: fixed; top: 64px; left: 8px; max-width: calc(100vw - var(--pane-width) - 32px); max-height: 52px; }
+  html[data-theme=glass] .camera-bar button { flex-direction: row; min-width: 44px; min-height: 44px; padding: 5px 7px; }
+  html[data-theme=glass] .camera-bar button svg { display: none; }
+}
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
-  html[data-theme=glass] .study-card::before { content: none; }
+  html[data-theme=glass] :is(.study-card,.controls-panel,.artwork-preview)::before { content: none; }
   html[data-theme] :is(.glass-surface,#save-status) { background: var(--surface-fallback); -webkit-backdrop-filter: none; backdrop-filter: none; }
   html[data-theme=glass] .glass-surface { text-shadow: none; }
+  html[data-theme=glass] .ui-dialog-backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }
   html[data-theme=glass] :is(.select-trigger,.secondary,input[type=text],input[type=search],input:not([type]),textarea) { border-color: #25372f99; box-shadow: none; }
 }
 @media (forced-colors: active) {
-  html[data-theme=glass] .study-card::before { content: none; }
+  html[data-theme=glass] :is(.study-card,.controls-panel,.artwork-preview)::before { content: none; }
   html[data-theme] :is(.glass-surface,#save-status) { background: Canvas; color: CanvasText; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
-  html[data-theme=glass] .glass-surface { text-shadow: none; }
+  html[data-theme=glass] .glass-surface { border: 1px solid CanvasText; text-shadow: none; }
+  html[data-theme=glass] .ui-dialog-backdrop { background: Canvas; -webkit-backdrop-filter: none; backdrop-filter: none; }
   /* Keep the system palette without a Canvas backplate covering HighlightText. */
   html[data-theme] .select-option[data-highlighted] { forced-color-adjust: none; background: Highlight; color: HighlightText; }
   html[data-theme] :is(.select-trigger,.select-popup,.secondary) { border: 1px solid CanvasText; box-shadow: none; }
+  html[data-theme=glass] .placement-action[aria-pressed=true],
+  html[data-theme=glass] .placement-action[aria-pressed=true]:not(:disabled):is(:hover,:active) { forced-color-adjust: none; background: Highlight; color: HighlightText; border-color: Highlight; }
+  html[data-theme=glass] .placement-action[aria-pressed=true]:focus-visible { outline-color: CanvasText; }
+  html[data-theme=glass] .selection-focus > button { background: ButtonFace; color: ButtonText; border: 1px solid ButtonText; box-shadow: none; }
+  html[data-theme=glass] .selection-focus > button[aria-pressed=true] { outline: 1px solid Highlight; }
   html[data-theme] .surface-tabs button[aria-pressed=true] { outline: 1px solid Highlight; }
   html[data-theme] input[type=range]::-webkit-slider-runnable-track { background: Canvas; border: 1px solid CanvasText; }
   html[data-theme] input[type=range]::-moz-range-track { background: Canvas; border: 1px solid CanvasText; }

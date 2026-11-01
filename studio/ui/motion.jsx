@@ -1,5 +1,6 @@
 import React, {useSyncExternalStore} from 'react';
 import {MotionConfig} from 'motion/react';
+import {COMPACT_LAYOUT_QUERY} from '../viewport-layout.js';
 
 export const UI_SPRING={type:'spring',stiffness:420,damping:36,mass:.9};
 
@@ -19,7 +20,7 @@ export function createMediaQueryStore(query,matchMedia=value=>globalThis.window?
  };
 }
 const reducedMotion=createMediaQueryStore('(prefers-reduced-motion: reduce)');
-const compactLayout=createMediaQueryStore('(max-width: 700px)');
+const compactLayout=createMediaQueryStore(COMPACT_LAYOUT_QUERY);
 export function useStudioReducedMotion(){
  return useSyncExternalStore(reducedMotion.subscribe,reducedMotion.getSnapshot,()=>true);
 }

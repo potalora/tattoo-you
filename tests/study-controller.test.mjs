@@ -315,3 +315,45 @@ test('alternative final save failure leaves the unsaved copy open for retry', as
   assert.match(f.messages.at(-1), /open but not saved/);
   assertReleased(f);
 });
+
+test('rejected commands preserve full bounded history, redo and selection',()=>{
+ const f=fixture(), h=f.controller.hist(); h.limit=2;
+ f.controller.mutate(p=>{p.notes='one';});f.controller.mutate(p=>{p.notes='two';});
+ f.controller.setProject(h.undo(f.controller.active()));
+ const before=copy({study:f.controller.active(),past:h.past,future:h.future}), events=[...f.events];
+ assert.equal(f.controller.mutate(p=>{p.notes='bad';p.selectedIds=[];throw Error('Rejected');}),false);
+ assert.deepEqual({study:f.controller.active(),past:h.past,future:h.future},before);
+ assert.deepEqual(f.events,events);
+});
+
+test('study capacity rejects copies before naming, camera, flush or rendering side effects',async()=>{
+ for(const command of ['saveAlternative','useBodyModel']){
+  const f=fixture();for(let i=1;i<100;i++){const p=project('Full '+i);f.state.workspace.projects.push(p);}
+  const before=copy(f.state.workspace);
+  assert.equal(await f.controller[command]('mhr-v1'),false);
+  assert.deepEqual(f.state.workspace,before);assert.deepEqual(f.events,[]);assert.deepEqual(f.writes,[]);
+ }
+});
+
+test('mutations reject aggregate portable JSON overflow before history or side effects',()=>{
+ const f=fixture();const filler='x'.repeat(1000000);
+ for(let i=1;i<9;i++){const p=project('Large '+i);p.extra=filler;f.state.workspace.projects.push(p);}
+ const before=copy(f.controller.active());
+ assert.equal(f.controller.mutate(p=>{p.extra=filler;}),false);
+ assert.deepEqual(f.controller.active(),before);assert.equal(f.controller.hist().past.length,0);assert.deepEqual(f.events,[]);
+});
+
+test('alternative and model copies reject portable JSON overflow before saving or cameras',async()=>{
+ for(const command of ['saveAlternative','useBodyModel']){
+  const f=fixture();f.original.extra='x'.repeat(1000000);
+  for(let i=1;i<8;i++){const p=project('Large '+i);p.extra='x'.repeat(1000000);f.state.workspace.projects.push(p);}
+  const before=copy(f.state.workspace);
+  assert.equal(await f.controller[command]('mhr-v1'),false);
+  assert.deepEqual(f.state.workspace,before);assert.deepEqual(f.events,[]);assert.deepEqual(f.writes,[]);
+ }
+});
+
+test('switching to a saved orbit labels its unclassified camera as custom',async()=>{
+ const f=fixture(),other=project('Orbit');other.camera={position:[1,1,3],target:[0,1,0]};f.state.workspace.projects.push(other);
+ assert.equal(await f.controller.switchProject(other.id),true);assert.equal(f.state.currentView,'custom');
+});

@@ -21,9 +21,11 @@ React subscribes with `useSyncExternalStore`. UI-only publications retain the cu
 
 ## Interface behavior
 
-The study selector and menu sit at the top left, the Bodoni Moda title is centered, and image export sits at the right. The inspector contains Composition, Artwork and Body tabs. Artwork has a direct import button and a compact list. Guidance for importing existing tattoos stays in that panel so the checkbox does not move the camera. Body controls retain the tuned lighting and automatic render quality, with a separate Refine preview action.
+Instrument is the default presentation. The study selector, save recovery and history sit in the top rail. The body preview has a recessed stage and camera controls; the right inspector contains Composition, Artwork and Body tabs. IBM Plex Sans, putty panels, dark selected controls and restrained orange, blue and green accents carry the interface. Glass remains available at `?theme=glass` for existing links.
 
-Desktop panels use a 20px corner radius, controls 12px, and menus 14px with 8px items. IBM Plex Sans uses 16px section titles, 14px labels/values and 12px supporting text; phone text inputs use 16px. Bold type identifies selected controls and headings. Glass surfaces use a light translucent fill, local background blur/luminance adjustment, opaque text and fine edges. They are a CSS approximation, not Apple's native Liquid Glass material.
+`studio/studio.css` owns shared structure, `studio/themes.css` owns Glass, and `studio/instrument.css` plus `instrument-controls.css` scope the Instrument presentation. Theme choice stays outside study data. The Instrument scene hides the authored room while retaining its illumination and body material setup.
+
+Numeric fields accept exact values. Mixed selections describe their reference value and editable count; single-tattoo placement follows the connected body surface. Save failures remain visible with Retry, and preview failures distinguish saved work from unsaved edits. The Layer Actions disclosure stays inside the scrolling inspector. Long study and artwork names wrap.
 
 On phones, the controls panel has collapsed, normal and expanded stops. Only the dedicated top handle drags the sheet; sliders and artwork retain their own input. The actual animated height updates the workspace measurement while the sheet moves. Desktop transitions clear mobile height overrides. Motion owns interface animation, while the scene owns finite camera interpolation and returns to idle after it settles. Export settles the camera before capture.
 
@@ -35,9 +37,10 @@ Reduced-motion preferences are observed live. Reduced transparency and increased
 npm ci
 npm run build
 npm test
+npm run check:ui
 npm start
 ```
 
-The build compiles the geometry kernel, vendors the renderer, bundles JSX/CSS, and assembles `dist-public/` from `public/runtime-assets.json`. Its manifest records hashes and provenance. The runtime license list includes Motion and its bundled dependencies. Keep the generated UI assets with their source changes.
+The build compiles the geometry kernel, vendors the renderer, bundles JSX/CSS, and assembles `dist-public/` from `public/runtime-assets.json`. Its manifest records hashes, provenance, source commit and whether the source tree was dirty. The runtime license list includes Motion and its bundled dependencies. Keep the generated UI assets with their source changes.
 
 Tests cover save/recovery behavior, camera interpolation and cancellation, sheet snap calculations, reduced-motion paths, layout measurement and public packaging. Browser checks covered desktop, tablet, 320px and 390px phone viewports, short landscape, keyboard menus/dialogs and live accessibility preferences. Viewport emulation does not establish physical iPhone or Android performance.

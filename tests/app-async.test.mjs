@@ -27,7 +27,7 @@ test('preview export freezes input and retains copied metadata through delayed i
  assert.equal(e.body.inert,true);assert.equal(e.button.disabled,true);await tick();
  h.p.name='Later study';h.p.tattoos[0].name='Later layer';h.p.tattoos[0].width=22;decode.resolve();await exporting;
  assert.ok(e.labels.includes('Original study'));assert.ok(e.labels.some(value=>value.includes('Original layer ≈ 7.0 cm')));assert.ok(!e.labels.some(value=>value.includes('Later')));
- assert.equal(e.downloads[0],'inkform-Original-study.png');assert.equal(e.body.inert,false);assert.equal(e.button.disabled,false);
+ assert.equal(e.downloads[0],'inkform-Original-study-custom-view.png');assert.equal(e.body.inert,false);assert.equal(e.button.disabled,false);
 });
 function exportHarness(h,{decode=async()=>{},snapshot=async()=> 'data:image/png;base64,completed'}={}) {
  const button={disabled:false},body={inert:false},labels=[],downloads=[],images=[];
@@ -74,7 +74,7 @@ test('actual mutate returns false on capacity rejection and preserves project se
  const p=project('At capacity'),asset={id:'art',name:'Artwork'},messages=[],effects=[];
  for(let i=0;i<MAX_TATTOOS;i++)addTattoo(p,asset);
  p.selectedIds=[p.tattoos[2].id,p.tattoos[7].id];
- const state={workspace:{projects:[p],activeProjectId:p.id},convertingBody:false};
+ const state={workspace:{projects:[p],activeProjectId:p.id,assets:[asset]},convertingBody:false};
  const controller=createStudyController(state,{say:message=>messages.push(message),render:()=>effects.push('render'),renderScene:()=>effects.push('scene'),scheduleSave:()=>effects.push('save')});
  const history=controller.hist();history.push(p);
  const before=structuredClone(p),past=structuredClone(history.past);

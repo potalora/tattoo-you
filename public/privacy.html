@@ -1,11 +1,43 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Privacy and storage — tattoo you</title></head>
-<body><main>
-<h1>Privacy and storage</h1>
-<p>tattoo you stores your projects and imported artwork in this browser on this device, using IndexedDB. There are no tattoo you accounts or cloud project sync. The application does not upload your projects or artwork.</p>
-<p>Browser storage is not a backup. Clearing site data, using a private browsing session, browser storage eviction, or losing this device can remove your work. Export a project backup and keep it somewhere separate. Import that backup to move your work to another browser or device.</p>
-<p>tattoo you requests persistent browser storage when available. Your browser may refuse or later clear it. Saving can also fail when storage is full; keep the editor open and export your work if a save fails.</p>
-<p>The hosting provider, Cloudflare, receives normal page and asset requests, including network information such as your IP address. tattoo you introduces no analytics, advertising trackers, or application cookies. The application's runtime models, fonts and scripts are hosted with the site.</p>
-<p>This is a limited beta. Physical iPhone and Android acceptance remains pending. Device storage behavior and rendering support may vary.</p>
-<p><a href="/studio/">Return to tattoo you</a> · <a href="/ASSET-NOTICES.md">Asset notices</a></p>
-</main></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#dedfd9">
+  <title>Privacy and storage — tattoo you</title>
+  <link rel="stylesheet" href="/site.css">
+</head>
+<body>
+  <a class="skip-link" href="#privacy">Skip to content</a>
+  <div class="site-shell">
+    <header class="site-header">
+      <a class="home-link" href="/">tattoo you</a>
+      <nav aria-label="Main"><a href="/studio/">Open studio</a></nav>
+    </header>
+    <main id="privacy" class="privacy-page">
+      <h1>Privacy and storage</h1>
+      <section aria-labelledby="stored-title">
+        <h2 id="stored-title">Your work stays in this browser</h2>
+        <p>tattoo you stores your studies and imported artwork in this browser on this device, using IndexedDB. The app doesn’t upload your artwork or studies. There are no tattoo you accounts or automatic project sync.</p>
+        <p>Each browser and site address has its own workspace. The public website and a locally running copy keep separate workspaces.</p>
+      </section>
+      <section aria-labelledby="backup-title">
+        <h2 id="backup-title">Keep a separate backup</h2>
+        <p>Clearing site data, private browsing, browser storage eviction or losing your device can remove your work. The app requests persistent storage when available, but your browser may refuse it or clear it later.</p>
+        <p>Download a JSON workspace backup to keep your studies and artwork together. To move your work, transfer that file and restore it in the destination browser. Restoring replaces that workspace; a safety backup download starts first. Check that you’ve kept the downloaded file.</p>
+        <p>PNG placement references and JSON backups are created in your browser and downloaded to your device. You choose whether to share them. A PNG reference shows a view of your study; keep a JSON backup if you want to continue editing.</p>
+        <p>If saving fails, keep the editor open and download a backup before reloading. Rendering and storage support depend on your browser and device.</p>
+      </section>
+      <section aria-labelledby="requests-title">
+        <h2 id="requests-title">Visiting the website</h2>
+        <p>The hosting provider, Cloudflare, receives normal page and asset requests, including network information such as your IP address. The app’s models, fonts and scripts are served with the site. Application code includes no analytics or advertising trackers.</p>
+      </section>
+      <section aria-labelledby="contact-title">
+        <h2 id="contact-title">Questions?</h2>
+        <p>email <a href="mailto:potalora@gmail.com">potalora@gmail.com</a></p>
+      </section>
+    </main>
+    <footer class="site-footer"><a href="/">tattoo you</a><a href="/ASSET-NOTICES.md">Asset notices</a></footer>
+  </div>
+</body>
+</html>

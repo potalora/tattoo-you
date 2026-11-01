@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {clearViewport,applyCameraViewport,observeViewportLayout} from '../studio/viewport-layout.js';
+import {clearViewport,applyCameraViewport,observeViewportLayout,isCompactLayout,COMPACT_LAYOUT_QUERY,resolveTheme,resolvePresentation} from '../studio/viewport-layout.js';
 import {cameraView} from '../studio/camera-framing.js';
 
 const layouts=[
@@ -174,4 +174,23 @@ test('portrait tablet study rail reserves the stage top while the inspector stay
  study.studyRail=false;study.right=220;study.bottom=385;
  assert.equal(layout.measure().x,244);assert.equal(layout.measure().y,88);
  layout.dispose();
+});
+test('absolute actionable status reserves its visible region above a short landscape camera tray',t=>{
+ const {element,host}=observedLayout(t,{width:667,height:375});
+ const header=element(-60,-10),panel=element(0,305,667,367),dockGroup=element(250,300),status=element(210,250);
+ status.position='absolute';status.dataset.idle='false';panel.dataset.panelSide='right';
+ const layout=observeViewportLayout({root:{},host,header,panel,dockGroup,status,onChange(){}});
+ assert.equal(layout.measure().y+layout.measure().height,194,'actionable status must bound body, not only camera group');
+ status.dataset.idle='true';assert.equal(layout.measure().y+layout.measure().height,234);
+ layout.dispose();
+});
+
+test('compact media contract preserves short portrait and uses side inspectors for short landscape',()=>{
+ for(const [width,height,compact] of [[667,375,false],[700,375,false],[844,390,false],[390,480,true],[390,844,true],[320,740,true],[700,700,true],[701,900,false]])assert.equal(isCompactLayout(width,height),compact,`${width}x${height}`);
+ assert.match(COMPACT_LAYOUT_QUERY,/orientation: portrait/);
+ for(const theme of ['glass','precision','gallery','soft','instrument']) {
+  assert.equal(resolveTheme(`?theme=${theme}`),theme);
+  assert.equal(resolvePresentation(`?theme=${theme}`),theme==='instrument'?'instrument':'glass');
+ }
+ assert.equal(resolveTheme('?theme=invalid'),'instrument');
 });

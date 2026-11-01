@@ -63,3 +63,11 @@ test('inspector surfaces stay mounted and the accessible sheet button remains av
   }
  }
 });
+
+test('placing disables the inspector expansion control while retaining the visible stage exit',async t=>{
+ const study=project('Placing'),workspace={revision:0,projects:[study],activeProjectId:study.id,assets:[]};
+ const app=createApplication({api:async()=>structuredClone(workspace),browser:{location:{search:''}}});t.after(()=>app.dispose());await app.initialize();
+ const snapshot=app.getSnapshot();
+ const html=renderToStaticMarkup(React.createElement(Inspector,{app,snapshot:{...snapshot,ui:{...snapshot.ui,blocked:false,placing:true,panelState:'collapsed'}},panelRef:{current:null}}));
+ const control=/<button[^>]*id="controls-toggle"[^>]*>/.exec(html)[0];assert.match(control,/\sdisabled(?:=""|(?=[\s>]))/);
+});

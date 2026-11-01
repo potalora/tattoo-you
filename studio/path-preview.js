@@ -30,17 +30,23 @@ function linearBakeMaterial(source,ink=false){
  return material;
 }
 
-export function createUVBakeCamera(){
+export function createUVBakeCamera({offset=[0,0],scale=[1,1]}={}){
  // WebGPU stores row zero at the top. Three r186 does not flip render-target
  // samples; the path tracer's atlas QuadMesh and compute sampler both use v=0
  // at the top. Put logical v=0 there when baking, without changing source UVs.
- const camera=new THREE.OrthographicCamera(0,1,0,1,.1,10);camera.position.z=1;camera.updateMatrixWorld();return camera;
+ const [x,y]=offset,[w,h]=scale;
+ const camera=new THREE.OrthographicCamera(x,x+w,y,y+h,.1,10);camera.position.z=1;camera.updateMatrixWorld();return camera;
 }
 
 export function chooseBakeSizes({width=1024,memoryGB,maxTextureSize=4096}={}){
  const compact=width<=700||(Number.isFinite(memoryGB)&&memoryGB<=4);
  const limit=Math.max(1,Math.min(4096,maxTextureSize));
  return {albedoSize:Math.min(compact?2048:4096,limit),roughnessSize:Math.min(compact?512:1024,limit)};
+}
+
+export function chooseTraceScale({width,height,viewportWidth=1024,memoryGB}={}){
+ const compact=viewportWidth<=700||(Number.isFinite(memoryGB)&&memoryGB<=4);
+ return Math.min(1,(compact?768:1536)/Math.max(width,height),Math.sqrt((compact?768**2:2_000_000)/(width*height)));
 }
 
 /** Expand valid island-edge texels into gutters before bilinear atlas sampling.
@@ -80,7 +86,7 @@ async function padBakeTarget(renderer,target,{check,resources}){
  }
 }
 
-async function bakeAlbedo(renderer,{bodyMesh,albedoMaterial,decals,size=2048,check,resources}){
+async function bakeAlbedo(renderer,{bodyMesh,albedoMaterial,decals,size=2048,bounds,check,resources}){
  if(!bodyMesh.geometry.index||!bodyMesh.geometry.attributes.uv)throw Error('Ray tracing requires the body’s original indexed UV geometry.');
  assertBakeUVs(bodyMesh.geometry.attributes.uv.array);
  // Albedo and roughness are bounded [0,1], and the tracer's atlas is RGBA8.
@@ -99,7 +105,7 @@ async function bakeAlbedo(renderer,{bodyMesh,albedoMaterial,decals,size=2048,che
   const patchGeometry=bakeGeometry(bodyMesh,decal),material=linearBakeMaterial(decal.mesh.material,true);resources.add(patchGeometry);resources.add(material);
   const patch=new THREE.Mesh(patchGeometry,material);patch.frustumCulled=false;patch.renderOrder=decal.mesh.renderOrder;scene.add(patch);
  }
- const camera=createUVBakeCamera();
+ const camera=createUVBakeCamera(bounds);
  const prior={target:renderer.getRenderTarget(),toneMapping:renderer.toneMapping,autoClear:renderer.autoClear,clearColor:renderer.getClearColor(new THREE.Color()),clearAlpha:renderer.getClearAlpha()};
  try{
   check();renderer.setRenderTarget(target);renderer.toneMapping=THREE.NoToneMapping;renderer.autoClear=true;renderer.setClearColor(0,0);
@@ -143,7 +149,7 @@ export function cloneTraceLight(source){
  return light;
 }
 
-function captureScene({scene,bodyMesh,decals,environment,albedo,roughness,resources}){
+function captureScene({scene,bodyMesh,decals,environment,albedo,roughness,detail,resources}){
  scene.updateMatrixWorld(true);
  const captured=new THREE.Scene();captured.background=scene.background?.isColor?scene.background.clone():scene.background;
  captured.environment=environment||null;captured.environmentIntensity=scene.environmentIntensity;captured.environmentRotation.copy(scene.environmentRotation);
@@ -156,7 +162,30 @@ function captureScene({scene,bodyMesh,decals,environment,albedo,roughness,resour
   const geometry=object.geometry.clone();resources.add(geometry);
   const material=physicalMaterial(object.material,resources);
   if(object===bodyMesh){material.color.setRGB(1,1,1);material.map=albedo;material.transparent=false;material.opacity=1;material.alphaTest=0;if(roughness){material.roughness=1;material.roughnessMap=roughness;}}
-  const mesh=new THREE.Mesh(geometry,material);mesh.matrix.copy(object.matrixWorld);mesh.matrixAutoUpdate=false;mesh.castShadow=object.castShadow;mesh.receiveShadow=object.receiveShadow;captured.add(mesh);
+  const addMesh=(g,m)=>{const mesh=new THREE.Mesh(g,m);mesh.matrix.copy(object.matrixWorld);mesh.matrixAutoUpdate=false;mesh.castShadow=object.castShadow;mesh.receiveShadow=object.receiveShadow;captured.add(mesh);};
+  if(object===bodyMesh&&detail){
+   // Generate the shared normal-map frame on the intact trace clone. Letting
+   // the tracer derive tangents after partitioning changes boundary vertices.
+   if(material.normalMap&&!geometry.attributes.tangent&&geometry.index&&geometry.attributes.position&&geometry.attributes.normal&&geometry.attributes.uv)geometry.computeTangents();
+   const uv=geometry.attributes.uv,index=geometry.index,baseIndices=[],detailIndices=[];
+   const [x,y]=detail.offset,[w,h]=detail.scale;
+   // Whole original triangles are assigned exactly once. The focus window
+   // already includes all selected tattoo triangles plus a white guard.
+   for(let at=0;at<index.count;at+=3){
+    const triangle=[index.getX(at),index.getX(at+1),index.getX(at+2)];
+    const inside=triangle.every(i=>uv.getX(i)>=x&&uv.getX(i)<=x+w&&uv.getY(i)>=y&&uv.getY(i)<=y+h);
+    (inside?detailIndices:baseIndices).push(...triangle);
+   }
+   if(detailIndices.length){
+    const focusedGeometry=geometry.clone();focusedGeometry.setIndex(detailIndices);resources.add(focusedGeometry);
+    const focusedMaterial=material.clone();resources.add(focusedMaterial);focusedMaterial.map=detail.albedo;
+    // Only albedo uses local UVs. Normal and roughness maps retain their
+    // original global UV coordinates and texture transforms.
+    detail.albedo.repeat.set(1/w,1/h);detail.albedo.offset.set(-x/w,-y/h);detail.albedo.updateMatrix();
+    addMesh(focusedGeometry,focusedMaterial);geometry.setIndex(baseIndices);
+   }
+  }
+  if(!geometry.index||geometry.index.count)addMesh(geometry,material);
  });
  return captured;
 }
@@ -171,7 +200,7 @@ export async function createPathPreview(renderer){
  let generation=0,disposed=false,running=null,active=false,samples=0;
  const cancel=()=>{generation++;return running?.catch(()=>{});};
  async function run(options,token){
-  const {scene,camera,bodyMesh,albedoMaterial,decals=[],environment,onProgress=()=>{},signal,roughnessMaterial}=options;
+  const {scene,camera,bodyMesh,albedoMaterial,decals=[],environment,onProgress=()=>{},signal,roughnessMaterial,inkDetail}=options;
   const resources=new Set();let tracer,denoiser;active=true;samples=0;
   const started=performance.now(),check=()=>{if(disposed||token!==generation||signal?.aborted||document.hidden)throw aborted();};
   const progress=phase=>onProgress({phase,samples,elapsedMs:performance.now()-started});
@@ -179,14 +208,16 @@ export async function createPathPreview(renderer){
    check();progress('baking');await nextFrame();check();
    const bakeSizes=chooseBakeSizes({width:renderer.domElement.clientWidth||renderer.domElement.width,memoryGB:globalThis.navigator?.deviceMemory,maxTextureSize:renderer.backend.device.limits.maxTextureDimension2D});
    const albedo=await bakeAlbedo(renderer,{bodyMesh,albedoMaterial,decals,size:bakeSizes.albedoSize,check,resources});
+   const detail=inkDetail?{offset:inkDetail.offset,scale:inkDetail.scale,albedo:await bakeAlbedo(renderer,{bodyMesh,albedoMaterial,decals,size:bakeSizes.albedoSize,bounds:inkDetail,check,resources})}:null;
    const roughness=roughnessMaterial?await bakeAlbedo(renderer,{bodyMesh,albedoMaterial:roughnessMaterial,decals:[],size:bakeSizes.roughnessSize,check,resources}):null;
    progress('preparing');await nextFrame();check();
    if(environment?.mapping===THREE.CubeUVReflectionMapping)throw Error('Ray tracing needs the original HDR environment, rather than its PMREM raster texture.');
-   const captured=captureScene({scene,bodyMesh,decals,environment,albedo,roughness,resources});
+   const captured=captureScene({scene,bodyMesh,decals,environment,albedo,roughness,detail,resources});
    const capturedCamera=camera.clone();capturedCamera.updateMatrixWorld(true);
    tracer=new WebGPUPathTracer(renderer);tracer.maxBounces=5;tracer.maxSamples=32;tracer.frameBudget=262144;tracer.dynamicLowRes=false;tracer.renderDelay=0;tracer.fadeDuration=0;tracer.minSamples=1;
-   // Bound memory and converge quickly; full-resolution editing remains rasterized.
-   tracer.renderScale=Math.min(1,768/Math.max(renderer.domElement.width,renderer.domElement.height));
+   // Desktop detail remains bounded to two megapixels; compact/low-memory
+   // devices retain the smaller still. The existing time budget bounds work.
+   tracer.renderScale=chooseTraceScale({width:renderer.domElement.width,height:renderer.domElement.height,viewportWidth:renderer.domElement.clientWidth,memoryGB:globalThis.navigator?.deviceMemory});
    tracer.setScene(captured,capturedCamera);check();
    const renderStarted=performance.now();let lastMeasure=0,minSamples=0;
    while(minSamples<32&&performance.now()-renderStarted<45000){

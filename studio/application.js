@@ -1,9 +1,10 @@
 import {createWorkspaceSync} from './workspace-sync.js';
 import {createStudyController} from './study-controller.js';
 import {createWorkspaceFiles} from './workspace-files.js';
-import {observeViewportLayout} from './viewport-layout.js';
+import {observeViewportLayout, resolvePresentation, resolveTheme, COMPACT_LAYOUT_QUERY} from './viewport-layout.js';
 import {bodyParams} from './body-controls.js';
 import {project, copy, editable, selection, addTattoo, transform, duplicateSelection, deleteSelection} from './model.js';
+import {STORAGE_LIMITS} from './storage-limits.js';
 import {applyBodyProfile, SHAPE_DEFAULTS} from './body-profiles.js';
 
 function freeze(value) {
@@ -26,27 +27,40 @@ function withActiveStudy(workspace) {
 export function createApplication({
   createStudio, regions = [], api, browser = globalThis,
   observeLayout = observeViewportLayout, fileServices = {}, clock,
-  storageMode = 'browser',
+  storageMode = 'browser', runtimeCapabilities = {}, initialQuality = 'auto',
+  presentation = resolvePresentation(browser.location?.search || ''),
 } = {}) {
   const state = {
     workspace: null, studio: null, dirty: false, saving: false, conflict: false,
     saveTask: null, renderTask: null, lastRenderOK: true, rendering: false,
-    renderAgain: false, convertingBody: false, ready: false, currentView: 'body',
+    mappingWarnings: [], renderAgain: false, convertingBody: false, ready: false, currentView: 'body',
   };
   const ui = {
-    storageMode, storagePersistence: 'unknown',
-    loading: true, error: '', blocked: false, status: 'Opening your workspace…',
-    saveLabel: 'Connecting…', saveError: false, retry: {hidden: true, text: 'Retry save'},
+    theme: resolveTheme(browser.location?.search || ''), presentation, storageMode, storagePersistence: 'unknown',
+    loading: true, error: '', previewError: '', mappingWarnings: [], blocked: false, status: 'Opening your workspace…',
+    saveLabel: 'Connecting…', saveError: false, saveFailure: '', retry: {hidden: true, text: 'Retry save'},
     surface: new URLSearchParams(browser.location?.search || '').get('panel') === 'body' ? 'body' : 'composition',
     panelState: 'normal', placing: false, artSearch: '', importExisting: false,
-    lighting: 'studio', quality: 'auto', stats: {}, preview: {phase: 'idle'},
+    lighting: 'studio', quality: ['auto', 'efficient', 'high'].includes(initialQuality) ? initialQuality : 'auto', stats: {}, preview: {phase: 'idle'},
     measurements: {}, dataStatus: '', dialog: null, nameRequest: null, focusPlacement: 0,
   };
   const listeners = new Set(), gestures = new Set();
   let snapshot, controller, files, initialization, viewportGeneration = 0;
   let previewAdapter = null, nameResolve = null, releaseViewport = null;
+  let placementPanelState = null, placementTarget = null, statusVersion = 0, failedSaveVersion = null;
+  let placementMedia = null, placementMediaListener = null;
 
+  const compositionKey = study => study ? JSON.stringify([study.id,study.body,study.tattoos.filter(t => t.visible)]) : '';
+  let warningKey = '', renderedWarningKey = '';
   function publish(domainChanged = true) {
+    const activeStudy = state.workspace?.projects.find(p => p.id === state.workspace.activeProjectId);
+    if (compositionKey(activeStudy) !== warningKey) {
+      warningKey = compositionKey(activeStudy); ui.mappingWarnings = []; state.mappingWarnings = [];
+    }
+    const editableCount = activeStudy ? editable(activeStudy).length : 0;
+    if (ui.placing && (editableCount !== 1 || placementTarget !== activeStudy.id + ':' + editable(activeStudy)[0].id)) updatePlacing(false);
+    reconcilePlacementLayout();
+
     const workspace = domainChanged || !snapshot
       ? (state.workspace ? copy(state.workspace) : null)
       : snapshot.workspace;
@@ -54,8 +68,9 @@ export function createApplication({
       ? workspace?.projects.find(p => p.id === workspace.activeProjectId) || null
       : snapshot.study;
     const history = study && controller ? controller.hist() : null;
-    snapshot = freeze({workspace, study, regions, ui: copy({
+    snapshot = freeze({workspace, study, regions, runtimeCapabilities: copy(runtimeCapabilities), selection: {canReanchor: editableCount === 1, editableCount}, ui: copy({
       ...ui, ready: state.ready, currentView: state.currentView,
+      hasUnsavedChanges: state.dirty || state.saving || state.conflict,
       blocked: ui.blocked || state.convertingBody || !state.ready, rendering: state.rendering,
       dataBlocked: ui.blocked || state.convertingBody || !state.workspace,
       canUndo: !!history?.past.length, canRedo: !!history?.future.length,
@@ -65,8 +80,8 @@ export function createApplication({
   // Only proven UI-only events reuse the frozen domain snapshot. Domain owners
   // and ambiguous persistence callbacks retain the default invalidating path.
   const publishUI = () => publish(false);
-  const say = message => { ui.status = message; publish(); };
-  const sayUI = message => { ui.status = message; publishUI(); };
+  const say = message => { ui.status = message; statusVersion++; publish(); };
+  const sayUI = message => { ui.status = message; statusVersion++; publishUI(); };
   const setInteractionBlocked = blocked => {
     ui.blocked = blocked;
     if (browser.document?.body) browser.document.body.inert = blocked;
@@ -74,16 +89,77 @@ export function createApplication({
   };
   const sync = createWorkspaceSync(state, {
     api, clock, say,
-    savedStatus(message, bad = false) {
-      ui.saveLabel = storageMode === 'browser' && message === 'Saved to workspace' ? 'Saved in this browser' : message;
-      ui.saveError = bad; publish();
+    saveFailed(message) { ui.saveFailure = message; failedSaveVersion = statusVersion + 1; say(message); },
+    saveRecovered() {
+      if (failedSaveVersion === statusVersion) {
+        sayUI(ui.placing ? 'Tap visible skin to anchor the selection. Locked tattoos will not move.' :
+          ui.mappingWarnings.length ? ui.mappingWarnings.join(' ') : 'Changes saved. Drag to orbit · choose tattoos to edit.');
+      }
+      failedSaveVersion = null;
     },
+    savedStatus(message, bad = false) {
+      if (message === 'Saved to workspace') ui.saveFailure = '';
+      ui.saveLabel = ui.saveFailure && message === 'Saving…' ? 'Unsaved · retrying…' :
+        storageMode === 'browser' && message === 'Saved to workspace' ? 'Saved in this browser' : message;
+      ui.saveError = bad || !!ui.saveFailure; publish();
+    },
+    persistenceChanged: publish,
     setRetry(value) { ui.retry = {...ui.retry, ...value}; publish(); },
     setRenderBusy() { publish(); },
+    setPreviewError(value) { ui.previewError = value; publishUI(); },
+    renderedComposition(study) {
+      // A pending render can settle after viewport cleanup clears its renderer.
+      if (!state.studio || compositionKey(study) !== compositionKey(controller.active())) return;
+      renderedWarningKey = compositionKey(study);
+      const records = state.studio.getMappingWarnings?.();
+      if (records) {
+        const visible = new Set(study.tattoos.filter(t => t.visible).map(t => t.id));
+        ui.mappingWarnings = [...new Set(records.filter(r => visible.has(r.tattooId)).map(r => r.message))];
+        state.mappingWarnings = copy(ui.mappingWarnings); publishUI();
+      }
+    },
   });
-  function placeMode(value) {
+  function compactPlacement() {
+    return ui.placing && Boolean(placementMedia?.matches ?? browser.matchMedia?.(COMPACT_LAYOUT_QUERY).matches);
+  }
+  function reconcilePlacementLayout() {
+    if (!ui.placing) return false;
+    const next = compactPlacement() ? 'collapsed' : placementPanelState;
+    if (next === null || next === ui.panelState) return false;
+    ui.panelState = next;
+    return true;
+  }
+  function releasePlacementMedia() {
+    if (placementMediaListener) placementMedia?.removeEventListener?.('change', placementMediaListener);
+    placementMedia = null; placementMediaListener = null;
+  }
+  function updatePlacing(value) {
+    if (value === ui.placing) return;
+    if (value) {
+      placementTarget = controller.active().id + ':' + editable(controller.active())[0].id;
+      // Preserve the entry stop once, including when placement starts beside a
+      // side inspector and later rotates into a sheet.
+      placementPanelState = ui.panelState;
+      placementMedia = browser.matchMedia?.(COMPACT_LAYOUT_QUERY) || null;
+      placementMediaListener = () => { if (reconcilePlacementLayout()) publishUI(); };
+      placementMedia?.addEventListener?.('change', placementMediaListener);
+    } else {
+      releasePlacementMedia(); placementTarget = null;
+      if (ui.status === 'Tap visible skin to anchor the selection. Locked tattoos will not move.') {
+        ui.status = 'Drag to orbit · choose tattoos to edit.'; statusVersion++;
+      }
+      if (placementPanelState !== null) { ui.panelState = placementPanelState; placementPanelState = null; }
+    }
     ui.placing = value;
+    reconcilePlacementLayout();
     state.studio?.setPlaceMode(value);
+  }
+  function placeMode(value) {
+    if (value && editable(controller.active()).length !== 1) {
+      say('Choose one tattoo to change its body area. Move, rotate, or scale the group with the adjustment controls.');
+      return false;
+    }
+    updatePlacing(value);
     say(value ? 'Tap visible skin to anchor the selection. Locked tattoos will not move.' : 'Drag to orbit · choose tattoos to edit.');
   }
   function chooseCamera(name) {
@@ -93,9 +169,9 @@ export function createApplication({
     publish();
     return sync.renderScene();
   }
-  function askName(title, value) {
+  function askName(title, value, {submitLabel = 'Save name', description = ''} = {}) {
     if (nameResolve) return Promise.resolve(null);
-    ui.nameRequest = {title, value};
+    ui.nameRequest = {title, value, submitLabel, description};
     const result = new Promise(resolve => { nameResolve = resolve; });
     publishUI();
     return result;
@@ -109,7 +185,7 @@ export function createApplication({
   function showSurface(surface) {
     if (!['composition', 'artwork', 'body'].includes(surface)) return;
     ui.surface = surface;
-    if (ui.panelState === 'collapsed') ui.panelState = 'normal';
+    if (ui.panelState === 'collapsed' && !ui.placing) ui.panelState = 'normal';
     publishUI();
   }
   function focusPlacement() { ui.focusPlacement++; publishUI(); }
@@ -118,7 +194,7 @@ export function createApplication({
     invalidateArtworkHistory: controller.invalidateArtworkHistory, say,
     setInteractionBlocked, getInteractionBlocked: () => ui.blocked,
     getStatus: () => ui.status, setDataStatus(value) { ui.dataStatus = value; publish(); },
-    showSurface, focusPlacement, publish, regions, bodyParams,
+    showSurface, focusPlacement, publish, regions,
     browser: {
       document: browser.document, Image: browser.Image, Blob: browser.Blob,
     },
@@ -132,8 +208,10 @@ export function createApplication({
   }
   function gesture(id, change, options = {}) {
     if (!canEdit()) return false;
-    if (!gestures.has(id)) { controller.hist().push(controller.active()); gestures.add(id); }
-    return controller.mutate(change, {...options, history: false});
+    const first = !gestures.has(id), before = first ? copy(controller.active()) : null;
+    const accepted = controller.mutate(change, {...options, history: false});
+    if (accepted && first) { controller.hist().push(before); gestures.add(id); publish(); }
+    return accepted;
   }
   const guarded = fn => (...args) => canEdit() ? fn(...args) : false;
   const report = async (operation, onError = error => say(error.message)) => {
@@ -145,10 +223,12 @@ export function createApplication({
     showSurface,
     setPanelState(value) {
       if (!['collapsed', 'normal', 'expanded'].includes(value)) return false;
+      if (ui.placing) return value === ui.panelState;
       if (ui.panelState !== value) { ui.panelState = value; publishUI(); }
       return true;
     },
     togglePanel() {
+      if (ui.placing) return false;
       ui.panelState = {normal: 'expanded', expanded: 'collapsed', collapsed: 'normal'}[ui.panelState];
       publishUI();
     },
@@ -197,6 +277,7 @@ export function createApplication({
     stopPlacing: guarded(() => placeMode(false)),
     renameLayer(value) { mutate(p => { const item = editable(p)[0]; if (item) item.name = value.trim().slice(0, 120) || 'Untitled tattoo'; }); },
     setRegion: guarded(async region => {
+      if (editable(controller.active()).length !== 1) return placeMode(true);
       if (region === 'custom') return placeMode(true);
       if (!regions.some(r => r.id === region)) return;
       mutate(p => { for (const item of editable(p)) {
@@ -232,9 +313,10 @@ export function createApplication({
     switchProject: guarded(id => { gestures.clear(); return controller.switchProject(id); }),
     saveAlternative: guarded(() => { gestures.clear(); return controller.saveAlternative(); }),
     async newProject() {
-      if (!canEdit()) return false;
-      const name = await askName('Name your new study', 'New study'); if (!name?.trim() || !canEdit()) return false;
+      if (!canEdit() || !controller.hasStudyCapacity()) return false;
+      const name = await askName('Name your new study', 'New study', {submitLabel: 'Create study'}); if (!name?.trim() || !canEdit()) return false;
       const next = project(name.trim().slice(0, 120));
+      if (!controller.canAddStudy(next)) return false;
       state.workspace.projects.push(next);
       const switched = await controller.switchProject(next.id);
       if (switched) showSurface('artwork');
@@ -243,7 +325,7 @@ export function createApplication({
     },
     async renameProject() {
       if (!canEdit()) return;
-      const name = await askName('Rename your study', controller.active().name);
+      const name = await askName('Rename your study', controller.active().name, {submitLabel: 'Rename study'});
       if (name?.trim()) mutate(p => { p.name = name.trim().slice(0, 120); }, {scene: false});
     },
     deleteProject: guarded(async () => {
@@ -270,7 +352,7 @@ export function createApplication({
     async restoreBackup(file) {
       if (!file || !canManageData()) return false;
       return report(async () => {
-        if (file.size > 160 * 1024 * 1024) throw Error('Workspace backups must be smaller than 160 MiB.');
+        if (file.size > STORAGE_LIMITS.maxRestoreBytes) throw Error('Workspace backups must be smaller than 160 MiB.');
         const backup = JSON.parse(await file.text());
         if (backup.version !== 3) throw Error('Choose an INKFORM workspace backup.');
         if (!browser.confirm('Replace all current studies and artwork with this backup? A download of your current workspace will start first. Keep that file as a separate copy.')) return false;
@@ -278,26 +360,28 @@ export function createApplication({
         try {
           if (!await sync.flush()) throw Error('Save or resolve the conflict before restoring a backup.');
           await files.exportBackup();
-          state.workspace = await api('restore', 'POST', {backup: withActiveStudy(backup), revision: state.workspace.revision});
-          state.dirty = false; controller.clearHistory(); gestures.clear(); placeMode(false);
-          publish(); await sync.renderScene(); await chooseCamera('body');
+          const replacement = await api('restore', 'POST', {backup: withActiveStudy(backup), revision: state.workspace.revision});
+          const {saved, rendered} = await adoptWorkspace(replacement);
           ui.dataStatus = storageMode === 'browser' ? 'Workspace restored and saved in this browser.' : 'Workspace restored and saved to your private workspace.';
+          if (!saved) ui.dataStatus += ' The editable study is open but not saved. Use Retry save or resolve the conflict; the restored backup already committed.';
+          if (!rendered) ui.dataStatus += ' Preview could not load; backup remains available. Retry the preview before editing or exporting an image.';
           publish();
           return true;
         } finally { setInteractionBlocked(false); }
       }, backupFailure);
     },
     async retrySave() {
-      if (!canEdit()) return false;
+      if (!canManageData()) return false;
       if (!state.conflict) return sync.flush();
       return report(async () => {
         await files.exportBackup();
         if (!browser.confirm('A backup download of your open edits has started. Keep that file, then load the current saved workspace?')) return false;
         setInteractionBlocked(true);
         try {
-          state.workspace = await normalizeSavedWorkspace(await api('workspace')); state.conflict = false; state.dirty = false;
-          controller.clearHistory(); gestures.clear(); ui.retry.hidden = true;
-          publish(); await sync.renderScene(); ui.saveLabel = 'Saved copy loaded'; return true;
+          const {saved, rendered} = await adoptWorkspace(await api('workspace'));
+          ui.dataStatus = saved ? 'Saved copy loaded.' : 'Saved copy loaded. The editable study is open but not saved. Use Retry save or resolve the conflict.';
+          if (!rendered) ui.dataStatus += ' Preview could not load; retry the preview before editing or exporting an image.';
+          publish(); return true;
         } finally { setInteractionBlocked(false); }
       });
     },
@@ -316,9 +400,28 @@ export function createApplication({
     const saved = await api('workspace', 'PUT', {revision: workspace.revision, projects, activeProjectId});
     return {...workspace, ...saved, projects, activeProjectId};
   }
+  async function adoptWorkspace(workspace) {
+    // The replacement has committed or was explicitly loaded. Old history and
+    // successful-render ownership must end before any follow-up storage work.
+    state.lastRenderOK = false; renderedWarningKey = '';
+    const usable = withActiveStudy(workspace);
+    state.workspace = usable; state.dirty = false; state.conflict = false;
+    controller.clearHistory(); gestures.clear(); ui.retry.hidden = true; ui.saveError = false; ui.saveFailure = ''; failedSaveVersion = null;
+    ui.saveLabel = storageMode === 'browser' ? 'Saved in this browser' : 'Saved to workspace';
+    placeMode(false);
+    let saved = true;
+    if (usable !== workspace) { sync.scheduleSave(); saved = await sync.flush(); }
+    publish();
+    let rendered = false;
+    try { rendered = !!await chooseCamera('body'); }
+    catch (error) { ui.previewError = error.message; say('Preview unavailable. Change the view to retry.'); }
+    if (state.studio) state.ready = rendered;
+    publish();
+    return {saved, rendered};
+  }
   async function initialize() {
     if (!initialization) initialization = (async () => {
-      // Keep the readable snapshot exportable if the normalization write fails.
+      // Keep the original readable snapshot exportable if normalization cannot save.
       state.workspace = await api('workspace');
       state.workspace = await normalizeSavedWorkspace(state.workspace);
       ui.saveLabel = storageMode === 'browser' ? 'Saved in this browser' : 'Saved to workspace';
@@ -329,7 +432,8 @@ export function createApplication({
   function attachViewport(host, elements) {
     const priorCleanup = releaseViewport?.();
     const generation = ++viewportGeneration;
-    ui.loading = true; ui.error = ''; ui.saveError = false; ui.saveLabel = 'Connecting…';
+    ui.loading = true; ui.error = ''; ui.previewError = '';
+    if (!state.workspace) ui.saveLabel = 'Connecting…';
     publish();
     let cancelled = false, engine = null, layout = null, pendingEngine = null, disposalTask = null, cleanupTask = null;
     const live = () => !cancelled && generation === viewportGeneration;
@@ -357,17 +461,18 @@ export function createApplication({
         await initialize(); if (!live()) return;
         layout = observeLayout({...elements, host, onChange: () => engine?.refreshLayout()});
         pendingEngine = createStudio(host, {
-          getClearViewport: layout.measure, initialBody: controller.active().body,
+          presentation, getClearViewport: layout.measure, initialBody: controller.active().body,
           onMeasurements(value) { if (live()) { ui.measurements = value; publishUI(); } },
-          onCamera(camera) {
+          onCamera(camera, metadata = {}) {
             if (!live() || !state.ready) return;
+            if (metadata.custom) state.currentView = 'custom';
             const old = controller.active().camera;
             if (!old || ['position', 'target'].some(k => camera[k].some((v, i) => Math.abs(v - old[k][i]) > 1e-5))) {
               controller.active().camera = camera; sync.scheduleSave();
             }
           },
           onPlace(anchor) {
-            if (!live() || !canEdit() || !editable(controller.active()).length) return;
+            if (!live() || !canEdit() || editable(controller.active()).length !== 1) return;
             mutate(p => { for (const item of editable(p)) { item.placement = copy(anchor); item.region = 'custom'; } });
             say('Anchored to the surface. Use the movement controls to refine the composition.');
           },
@@ -379,30 +484,42 @@ export function createApplication({
             if (!live()) return;
             const previous = [...new Set(ui.stats.warnings || [])].join(' ');
             ui.stats = value;
-            if (value.warnings?.length) sayUI([...new Set(value.warnings)].join(' '));
+            const warningsAreCurrent = !state.rendering && state.lastRenderOK && renderedWarningKey === compositionKey(controller.active());
+            if (warningsAreCurrent) {
+              const records = value.mappingWarnings;
+              const visible = new Set(controller.active().tattoos.filter(t => t.visible).map(t => t.id));
+              ui.mappingWarnings = [...new Set(records ? records.filter(r => visible.has(r.tattooId)).map(r => r.message) : (value.warnings || []))];
+              state.mappingWarnings = copy(ui.mappingWarnings);
+            }
+            if (warningsAreCurrent && ui.mappingWarnings.length) sayUI(ui.mappingWarnings.join(' '));
             else if (previous && ui.status === previous) sayUI('Drag to orbit · choose tattoos to edit.');
             else publishUI();
           },
           onPreview(value) { if (live()) { ui.preview = value; publishUI(); } },
-          onError() { if (live()) { state.lastRenderOK = false; sayUI('Preview paused. Change the view to retry, or reload the studio. Your saved study is safe.'); } },
+          onError(error) { if (live()) { state.lastRenderOK = false; ui.previewError = error?.message || 'Preview paused.'; sayUI('Preview unavailable. Change the view to retry, or reload the preview. Workspace backup is available.'); } },
         });
         engine = await pendingEngine;
         if (!live()) { await disposeEngine(engine); return; }
         state.studio = engine;
+        await engine.setQuality(ui.quality);
+        if (!live()) return;
         if (!await sync.renderScene()) throw Error('The body preview could not be rendered.');
         if (!live()) return;
         if (new URLSearchParams(browser.location?.search || '').get('view') === 'studio') await chooseCamera('body');
-        else if (controller.active().camera) engine.restoreCamera(controller.active().camera);
+        else if (controller.active().camera) { state.currentView = 'custom'; engine.restoreCamera(controller.active().camera); }
         else await chooseCamera('body');
         if (!live()) return;
-        state.ready = true; ui.loading = false; ui.error = ''; ui.saveError = false;
-        ui.saveLabel = storageMode === 'browser' ? 'Saved in this browser' : 'Saved to workspace';
+        state.ready = true; ui.loading = false; ui.error = ''; ui.previewError = '';
+        if (!state.dirty && !state.conflict && !ui.saveError) ui.saveLabel = storageMode === 'browser' ? 'Saved in this browser' : 'Saved to workspace';
         say(controller.active().tattoos.length ? 'Drag to orbit. Choose Place on body to move selected ink.' : 'Choose artwork to begin your study.');
       } catch (error) {
         if (!live()) return;
         await cleanup();
         if (generation !== viewportGeneration) return;
-        console.error(error); ui.error = error.message; ui.loading = false; ui.saveLabel = 'Not connected'; ui.saveError = true; publish();
+        console.error(error); ui.error = error.message; ui.loading = false;
+        if (state.workspace) ui.previewError ||= error.message;
+        else { ui.saveLabel = 'Not connected'; ui.saveError = true; }
+        say('Preview unavailable. Try again to reload the preview.');
       }
     })();
     return cleanup;
@@ -413,9 +530,10 @@ export function createApplication({
     getSnapshot: () => snapshot,
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     setArtworkPreview(adapter) { previewAdapter = adapter; },
-    hasUnsavedChanges: () => state.dirty || state.saving,
+    hasUnsavedChanges: () => state.dirty || state.saving || state.conflict,
     flush: sync.flush,
     dispose() {
+      updatePlacing(false); releasePlacementMedia();
       releaseViewport?.(); previewAdapter?.destroy(); previewAdapter = null;
       actions.resolveName(null); listeners.clear();
       (clock?.clearTimeout || clearTimeout)(state.saveTimer);
