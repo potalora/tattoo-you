@@ -157,7 +157,11 @@ At phone width (700px and below), the rail stays in one compact row and controls
 
 The selected-tattoo header identifies the current selection and its lock scope. Desktop shows exact Width and Rotation followed by placement and deeper adjustments. Phones use tactile Place / Size / Rotate / View / More keys and expose one active tool. The Tattoos surface is always reachable without scrolling past those properties. One shared explanation describes group edits and locked scope. New alternatives start with `Copy` or `Copy 2`; existing names stay intact.
 
+Reserve an 82px column for exact numeric entry and 8px between the field, slider and validation rows so their focus outlines remain separate. Phone save feedback occupies a second line beneath the study name, including its state and browser scope. Mixed selections keep editable controls first and place the optional, counted unlock action after their scope explanation.
+
 Empty studies offer Reference → Artwork → Placement. Body source, anatomy and starting profile precede fine proportion controls. Import focuses the tattoo in Detail. Orbit, Detail and an Angles selector form a compact camera bank. Comparison and reference review use solid, focused work surfaces: paired A/B captures on desktop, a same-size A/B switch on phones, and the exact reference PNG with download/return actions.
+
+Reference inspection opens at 100%, with Fit, stepped zoom and native scrolling supplemented by mouse dragging. Image pixels are never re-encoded by inspection. The download/return footer and its persistent confirmation stay outside the scrolling content. Short screens allow internal scrolling to reach the full image area and guidance.
 
 Public pages use a centered shell (maximum 1440px), generous outer gutters and heading/copy rows. These collapse to one column at 600px. They share materials and type, not the editor's fixed-canvas layout.
 

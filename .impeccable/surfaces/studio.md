@@ -19,7 +19,7 @@ Operate
 
 Import prepared artwork, place and adjust it on a body reference, compare studies and review/download a reference. The editor-first journey separates selected-tattoo adjustment, the tattoo collection and study actions. Reference → Artwork → Placement gives an empty study direction without a compulsory wizard. Phones show a compact active adjustment tool and an independently reachable tattoo tray. Desktop keeps exact controls alongside a large recessed body display.
 
-Comparison shows two compatible studies from the same camera: paired on desktop, A/B switching on phones. Reference review shows the exact downloadable PNG and a route back to editing for another angle. Direct export remains available in Study actions.
+Comparison shows two compatible studies from the same camera: paired on desktop, A/B switching on phones. Reference review shows the exact downloadable PNG, in-dialog full-size inspection with zoom/pan, persistent download feedback and a route back to editing for another angle. Direct export remains available in Study actions.
 
 ## Constraints
 

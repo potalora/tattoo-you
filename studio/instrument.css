@@ -84,6 +84,7 @@ html[data-theme=instrument] .primary-transforms { display: grid; grid-template-c
 html[data-theme=instrument] .panel-intro { margin-bottom: 24px; }
 html[data-theme=instrument] .panel-intro h2 { font-size: 16px; }
 html[data-theme=instrument] .selection-preview { border: 0; }
+html[data-theme=instrument] .selection-unlock-inline { width: auto; min-height: 44px; margin: 4px 0 0; padding: 8px 10px; border: 1px solid var(--line); background: var(--panel); box-shadow: inset 0 1px 0 #ffffffb3, 0 1px 0 #23272024; white-space: normal; }
 html[data-theme=instrument] .placement-row { margin-top: 24px; }
 html[data-theme=instrument] .advanced-tattoo { margin-top: 24px; }
 html[data-theme=instrument] .setup-guide h2 { font-size: 22px; line-height: 1.25; font-weight: 500; }
@@ -135,12 +136,6 @@ html[data-theme=instrument] .comparison-empty { margin-top: 28px; max-width: 60c
 html[data-theme=instrument] .comparison-empty :is(p,button) { margin-top: 16px; }
 html[data-theme=instrument] .review-actions { display: flex; gap: 8px; margin-top: 24px; }
 html[data-theme=instrument] .review-error { color: var(--danger); margin-top: 16px; }
-html[data-theme=instrument] .reference-layout { display: grid; grid-template-columns: minmax(0,1fr) minmax(240px,300px); gap: 32px; margin-top: 24px; align-items: start; }
-html[data-theme=instrument] .reference-layout figure { margin: 0; }
-html[data-theme=instrument] .reference-layout img { display: block; width: 100%; max-height: 66dvh; object-fit: contain; background: var(--instrument-recess); }
-html[data-theme=instrument] .reference-guidance { display: flex; flex-direction: column; gap: 16px; }
-html[data-theme=instrument] .reference-guidance h3 { font-size: 18px; }
-html[data-theme=instrument] .reference-dimensions { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 
 @media (max-width: 1050px) {
   html[data-theme=instrument] .instrument-brand { flex: 0 1 130px; }
@@ -149,18 +144,19 @@ html[data-theme=instrument] .reference-dimensions { font-family: var(--mono); fo
   html[data-theme=instrument] .header-right .save-image { min-width: 44px; }
 }
 @media (max-width: 700px) and (min-height: 501px), (max-width: 700px) and (orientation: portrait) {
-  html[data-theme=instrument] { --header-height: 52px; --sheet-height: 252px; --expanded-height: min(50dvh,340px); --collapsed-height: 60px; }
+  html[data-theme=instrument] { --header-height: 52px; --sheet-height: min(252px,calc(50dvh - 24px)); --expanded-height: min(50dvh,340px); --collapsed-height: 60px; }
   html[data-theme=instrument] .masthead { inset: max(6px,env(safe-area-inset-top)) 8px auto; height: 52px; display: flex; gap: 4px; }
   html[data-theme=instrument] .instrument-brand, html[data-theme=instrument] .instrument-history { display: none; }
   html[data-theme=instrument] .study-card { flex: 1; width: auto; padding: 2px 4px 2px 8px; gap: 4px; min-width: 0; max-width: none; }
   html[data-theme=instrument] .study-picker { align-self: stretch; }
-  html[data-theme=instrument] .study-card:not(:has(.save-recovery:not([hidden]))) .study-save { position: absolute; left: 8px; bottom: 4px; pointer-events: none; }
+  html[data-theme=instrument] .study-card:not(:has(.save-recovery:not([hidden]))) .study-save { position: absolute; left: 8px; right: 52px; bottom: 4px; height: 16px; max-width: none; min-width: 0; flex-wrap: nowrap; gap: 4px; pointer-events: none; }
+  html[data-theme=instrument] .study-card:not(:has(.save-recovery:not([hidden]))) .study-save .storage-scope { flex: 1; flex-basis: auto; min-width: 0; line-height: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   html[data-theme=instrument] .study-save > svg { width: 12px; }
-  html[data-theme=instrument] .study-save .save-status-short { display: none; }
+  html[data-theme=instrument] .study-save .save-status-short { display: inline; flex: none; line-height: 16px; }
   html[data-theme=instrument] .study-save[data-save-state=error] .save-status-short { display: inline; }
   html[data-theme=instrument] .storage-scope { font-size: 12px; }
   html[data-theme=instrument] .study-save { gap: 2px; }
-  html[data-theme=instrument] #project-select { height: 46px; min-height: 44px; padding: 0 0 16px; font-size: 14px; }
+  html[data-theme=instrument] #project-select { height: 46px; min-height: 44px; padding: 0 0 18px; font-size: 14px; }
   html[data-theme=instrument] .masthead > .header-right { height: 52px; gap: 4px; }
   html[data-theme=instrument] .header-right .save-image { width: 44px; padding: 10px; }
   html[data-theme=instrument] .save-label-wide, html[data-theme=instrument] .save-label-compact { display: none; }
@@ -202,9 +198,9 @@ html[data-theme=instrument] .reference-dimensions { font-family: var(--mono); fo
   html[data-theme=instrument] .context-camera > button { display: flex; align-items: center; justify-content: center; gap: 4px; padding-inline: 6px; }
   html[data-theme=instrument] .context-camera button[aria-pressed=true] { background: var(--instrument-blue); color: var(--paper); }
 
-  html[data-theme=instrument] .primary-transform .range-control { display: grid; grid-template-columns: minmax(0,1fr) auto; grid-template-rows: auto 44px; margin: 0; gap: 0 8px; }
+  html[data-theme=instrument] .primary-transform .range-control { display: grid; grid-template-columns: minmax(0,1fr) auto; grid-template-rows: auto 44px; margin: 0; gap: 8px; }
   html[data-theme=instrument] .primary-transform .range-control > label { align-self: center; margin: 0; }
-  html[data-theme=instrument] .primary-transform .range-exact { grid-template-columns: 72px 4ch; }
+  html[data-theme=instrument] .primary-transform .range-exact { grid-template-columns: 82px 4ch; }
   html[data-theme=instrument] .primary-transform .range-control > input[type=range] { grid-column: 1 / -1; }
   html[data-theme=instrument] [data-adjustment] .primary-transform,
   html[data-theme=instrument] [data-adjustment] .placement-row,
@@ -234,9 +230,6 @@ html[data-theme=instrument] .reference-dimensions { font-family: var(--mono); fo
   html[data-theme=instrument] .comparison-switch button { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
   html[data-theme=instrument] .comparison-switch button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   html[data-theme=instrument] .comparison-switch button[aria-pressed=true] { background: var(--text); color: var(--paper); }
-  html[data-theme=instrument] .reference-layout { display: flex; flex-direction: column; gap: 20px; margin-top: 20px; }
-  html[data-theme=instrument] .reference-layout img { max-height: none; height: auto; }
-  html[data-theme=instrument] .reference-guidance { gap: 12px; }
 }
 @media (max-width: 700px) and (max-height: 600px) and (orientation: portrait) {
   html[data-theme=instrument] { --sheet-height: 252px; --expanded-height: max(284px,46dvh); }
@@ -244,7 +237,7 @@ html[data-theme=instrument] .reference-dimensions { font-family: var(--mono); fo
   html[data-theme=instrument] .panel-intro { min-height: 32px; }
   html[data-theme=instrument] .selection-description > p { font-size: 12px; line-height: 1.25; }
   html[data-theme=instrument] .adjustment-tools { margin-bottom: 4px; }
-  html[data-theme=instrument] .primary-transform .range-control { grid-template-rows: auto 36px; }
+  html[data-theme=instrument] .primary-transform .range-control { grid-template-rows: auto 44px; }
 }
 @media (max-width: 700px) and (max-height: 500px) and (orientation: portrait) {
   html[data-theme=instrument] { --sheet-height: calc(100dvh - 270px); --expanded-height: calc(100dvh - 246px); }
@@ -283,5 +276,4 @@ html[data-theme=instrument] .reference-dimensions { font-family: var(--mono); fo
 
 html[data-theme=instrument] .adjustment-tools button[aria-pressed=true]:not(:disabled):hover,
 html[data-theme=instrument] .surface-tabs button[aria-pressed=true]:not(:disabled):hover { background: #41483a; color: var(--paper); }
-html[data-theme=instrument] .reference-downloaded { color: var(--instrument-green); }
 html[data-theme=instrument] #capture-comparison { width: auto; min-width: 200px; }

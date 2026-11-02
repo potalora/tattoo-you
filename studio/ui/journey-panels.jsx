@@ -1,14 +1,13 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {Button, Select, Dialog, DialogContent, DialogTitle, DialogDescription} from './primitives.jsx';
 import {compatibleComparisonStudies} from '../study-comparison.js';
+import {ReferenceReview} from './reference-inspector.jsx';
 
 export function JourneyDialogs({app, snapshot}) {
   const {ui, study, workspace} = snapshot, a = app.actions;
   const [side, setSide] = useState('a');
-  const [downloaded, setDownloaded] = useState(false);
   const captureButton = useRef(null), wasBusy = useRef(false);
   useEffect(() => { setSide('a'); }, [ui.comparison]);
-  useEffect(() => { setDownloaded(false); }, [ui.reference]);
   useEffect(() => {
     if (wasBusy.current && !ui.reviewBusy && ui.dialog === 'compare') captureButton.current?.focus();
     wasBusy.current = ui.reviewBusy;
@@ -49,15 +48,7 @@ export function JourneyDialogs({app, snapshot}) {
         <DialogTitle>Review your reference</DialogTitle>
         <DialogDescription>This is the PNG you’ll download. Check the artwork, framing and placement notes.</DialogDescription>
         <p className="review-error" role="alert" hidden={!ui.reviewError}>{ui.reviewError}</p>
-        {ui.reference && <div className="reference-layout">
-          <figure><img id="reference-preview" src={ui.reference.dataUrl} width={ui.reference.width} height={ui.reference.height} alt={`Reference PNG for ${ui.reference.studyName}; ${ui.reference.view} view, with placement notes`} /></figure>
-          <div className="reference-guidance"><h3>Ready for the conversation</h3><p>Confirm the final fit on your body with your artist. The preview and measurements are approximate.</p><p>For artwork that wraps around the body, return to editing and save another angle.</p>
-            <p className="reference-dimensions">PNG · {ui.reference.width} × {ui.reference.height}</p>
-            <Button id="download-reference" variant="primary" onClick={() => { if (a.downloadReference()) setDownloaded(true); }}>Download PNG</Button>
-            {downloaded && <p role="status" className="reference-downloaded">PNG download started.</p>}
-            <Button id="reference-back" variant="secondary" onClick={a.closeDialog}>Back to editing</Button>
-          </div>
-        </div>}
+        {ui.dialog === 'reference' && ui.reference && <ReferenceReview reference={ui.reference} downloaded={ui.referenceDownloaded} actions={a} />}
         {!ui.reference && <div className="review-actions"><Button variant="primary" disabled={ui.reviewBusy} onClick={a.reviewReference}>Try again</Button><Button onClick={a.closeDialog}>Back to editing</Button></div>}
       </DialogContent>
     </Dialog>

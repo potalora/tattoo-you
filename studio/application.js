@@ -45,7 +45,7 @@ export function createApplication({
     panelState: 'normal', placing: false, adjustmentTool: 'place', artSearch: '', importExisting: false,
     lighting: 'studio', quality: ['auto', 'efficient', 'high'].includes(initialQuality) ? initialQuality : 'auto', stats: {}, preview: {phase: 'idle'},
     measurements: {}, dataStatus: '', dialog: null, nameRequest: null, focusPlacement: 0,
-    comparison: null, comparisonTarget: '', reviewBusy: false, reviewError: '', reference: null,
+    comparison: null, comparisonTarget: '', reviewBusy: false, reviewError: '', reference: null, referenceDownloaded: false,
   };
   const listeners = new Set(), gestures = new Set();
   let snapshot, controller, files, initialization, viewportGeneration = 0;
@@ -406,7 +406,7 @@ export function createApplication({
     },
     async reviewReference() {
       if (!canEdit() || ui.reviewBusy) return false;
-      placeMode(false); preparedReference = null; ui.reference = null;
+      placeMode(false); preparedReference = null; ui.reference = null; ui.referenceDownloaded = false;
       ui.reviewBusy = true; ui.reviewError = ''; publishUI();
       try {
         preparedReference = await files.prepareReference();
@@ -419,7 +419,8 @@ export function createApplication({
     },
     downloadReference() {
       if (!preparedReference || ui.reviewBusy) return false;
-      files.downloadReference(preparedReference); return true;
+      files.downloadReference(preparedReference);
+      ui.referenceDownloaded = true; publishUI(); return true;
     },
     exportBackup: () => canManageData() ? report(() => files.exportBackup(), backupFailure) : false,
     async restoreBackup(file) {
@@ -462,7 +463,7 @@ export function createApplication({
     setStoragePersistence(value) { ui.storagePersistence = value === true ? 'granted' : 'not-granted'; publishUI(); },
     closeDialog() {
       if (ui.reviewBusy) return false;
-      ui.dialog = null; ui.comparison = null; ui.reference = null; preparedReference = null; ui.reviewError = ''; publishUI();
+      ui.dialog = null; ui.comparison = null; ui.reference = null; preparedReference = null; ui.referenceDownloaded = false; ui.reviewError = ''; publishUI();
       return true;
     },
     resolveName(value) {

@@ -141,7 +141,7 @@ html[data-theme=instrument] #tattoo-controls > .range-control {
   column-gap: 12px;
 }
 html[data-theme=instrument] .range-control label { color: var(--muted); font-size: 13px; }
-html[data-theme=instrument] .primary-transform .range-control { margin-block: 0; }
+html[data-theme=instrument] .primary-transform .range-control { margin-block: 0; row-gap: 8px; }
 html[data-theme=instrument] .range-control output {
   min-width: 76px;
   padding: 4px 7px;

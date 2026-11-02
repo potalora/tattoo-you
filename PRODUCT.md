@@ -34,7 +34,7 @@ The public static app opens at `/studio/`. Import a tightly cropped transparent 
 - Phones use a contextual Place / Size / Rotate / View / More deck with three sheet stops and a dedicated drag handle. The tattoo collection is independently reachable. Controls and artwork keep their own gestures; short landscape uses a side inspector.
 - Empty studies offer Reference → Artwork → Placement without a compulsory wizard. Import opens a close-up. Anatomy and starting profile come before fine proportion adjustments.
 - Visual comparison captures two studies with matching body settings at the same camera pose. Desktop shows paired previews; phones switch A/B. The live study, saved cameras and history remain independent.
-- Reference review shows the exact PNG offered for download, including its placement notes. Direct PNG download remains available in Study actions; another angle is prepared by returning to editing.
+- Reference review shows the exact PNG offered for download, including its placement notes. In-dialog inspection offers Fit, 100%, zoom and mouse, touch or keyboard panning; download confirmation stays beside the action. Direct PNG download remains available in Study actions; another angle is prepared by returning to editing.
 
 ## Brand Commitments
 

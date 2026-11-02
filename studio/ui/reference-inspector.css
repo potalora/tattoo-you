@@ -1,0 +1,82 @@
+/* Reference review keeps its actions outside the image's scrolling work area. */
+#reference-dialog.reference-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: min(880px, calc(100dvh - 40px));
+  overflow: hidden;
+}
+#reference-dialog.reference-dialog h2 { flex: none; margin-bottom: 0; }
+#reference-dialog.reference-dialog > [data-slot=dialog-description] { flex: none; margin: 0; }
+#reference-dialog .review-error:not([hidden]) { flex: none; margin: 0; }
+#reference-dialog .reference-review-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 260px);
+  align-items: start;
+  gap: 24px;
+  padding: 3px;
+  scrollbar-color: var(--muted) transparent;
+}
+#reference-dialog .reference-inspector { min-width: 0; }
+#reference-dialog .reference-inspection-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+#reference-dialog .reference-inspection-controls .ui-button { width: auto; margin: 0; }
+#reference-dialog .reference-zoom-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+#reference-dialog .reference-zoom-controls .ui-button { min-width: 44px; min-height: 44px; padding-inline: 10px; }
+#reference-dialog .reference-zoom-controls output { min-width: 48px; text-align: center; font: 12px var(--mono); font-variant-numeric: tabular-nums; }
+#reference-dialog .reference-inspection-viewport {
+  width: 100%;
+  height: clamp(160px, 46dvh, 520px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y pinch-zoom;
+  background: var(--instrument-recess, var(--bg));
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  box-sizing: border-box;
+  scrollbar-color: var(--muted) var(--instrument-recess, var(--bg));
+}
+#reference-dialog .reference-inspector[data-inspecting=true] .reference-inspection-viewport { cursor: grab; }
+#reference-dialog .reference-inspection-viewport[data-panning=true] { cursor: grabbing; user-select: none; }
+#reference-dialog .reference-inspection-viewport:focus-visible { outline: 2px solid var(--instrument-blue, var(--accent)); outline-offset: 2px; }
+#reference-dialog .reference-image-space { display: flex; align-items: center; justify-content: center; }
+#reference-dialog #reference-preview { display: block; flex: none; max-width: none; max-height: none; object-fit: contain; user-select: none; }
+#reference-dialog .reference-pan-help { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+#reference-dialog .reference-review-guidance { min-width: 0; overflow-wrap: anywhere; }
+#reference-dialog .reference-review-guidance h3 { margin: 0 0 8px; font-size: 18px; }
+#reference-dialog .reference-review-guidance p { margin: 0 0 12px; }
+#reference-dialog .reference-review-footer {
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+#reference-dialog .reference-dimensions { margin: 0; overflow-wrap: anywhere; font: 12px var(--mono); color: var(--muted); }
+#reference-dialog .reference-review-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+#reference-dialog .reference-review-buttons .ui-button { min-width: 0; min-height: 44px; margin: 0; white-space: normal; }
+#reference-dialog .reference-downloaded { grid-column: 1 / -1; min-height: 22px; margin: 0; font-size: 13px; color: var(--instrument-green, var(--text)); }
+@media (max-width: 700px) {
+  #reference-dialog.reference-dialog { height: calc(100dvh - 16px); gap: 8px; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  #reference-dialog .reference-review-content { display: block; }
+  #reference-dialog .reference-review-guidance { margin-top: 20px; }
+  #reference-dialog .reference-review-footer { grid-template-columns: minmax(0, 1fr); gap: 4px; padding-top: 8px; }
+  #reference-dialog .reference-review-buttons { margin-top: 2px; }
+  #reference-dialog .reference-inspection-controls { margin-bottom: 8px; }
+  #reference-dialog .reference-inspection-viewport { height: clamp(160px, 40dvh, 440px); }
+}
+@media (max-height: 500px) and (min-width: 701px) {
+  #reference-dialog.reference-dialog { gap: 8px; padding-block: 16px; height: calc(100dvh - 16px); }
+  #reference-dialog .reference-inspection-viewport { height: 180px; }
+  #reference-dialog .reference-review-footer { padding-top: 8px; }
+}
+@media (forced-colors: active) {
+  #reference-dialog .reference-inspection-viewport { background: Canvas; border-color: CanvasText; scrollbar-color: auto; }
+  #reference-dialog .reference-inspection-viewport:focus-visible { outline-color: Highlight; }
+  #reference-dialog .reference-downloaded { color: CanvasText; }
+}

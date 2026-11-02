@@ -15,6 +15,8 @@ function CompositionPanelView({app, snapshot, instrument = false}) {
   const disabled = ui.blocked || !items.length;
   const canReanchor = snapshot.selection?.canReanchor ?? items.length === 1;
   const hasLocked = chosen.some(layer => layer.locked);
+  const lockedCount = chosen.length - items.length;
+  const mixedLocks = hasLocked && items.length > 0;
   const name = chosen.length === 1 ? chosen[0].name : chosen.length ? 'Multiple tattoos' : '';
   const selectedId = chosen.length === 1 ? chosen[0].id : null;
   const [nameDraft, setNameDraft] = useState(name);
@@ -68,7 +70,7 @@ function CompositionPanelView({app, snapshot, instrument = false}) {
           <Button variant="ghost" className="selection-lock" id="lock-selection" aria-label="Lock in place" title="Lock in place" hidden={!items.length} disabled={disabled} onClick={() => actions.lockSelection(true)}><LockKeyhole size={18} aria-hidden="true" /></Button>
         </div>
       </div>
-      <Button variant="secondary" id="unlock-selection" hidden={!hasLocked} disabled={ui.blocked || !hasLocked} onClick={() => actions.lockSelection(false)}>Unlock to adjust</Button>
+      {!mixedLocks && <Button variant="secondary" id="unlock-selection" hidden={!hasLocked} disabled={ui.blocked || !hasLocked} onClick={() => actions.lockSelection(false)}>Unlock to adjust</Button>}
       <div id="tattoo-controls" hidden={!items.length}>
         {instrument && <nav className="adjustment-tools" aria-label="Tattoo adjustment">
           {[['place','Place'],['size','Size'],['rotate','Rotate'],['view','View'],['more','More']].map(([id,label]) => <Button key={id} variant="ghost" aria-pressed={ui.adjustmentTool === id} onClick={() => actions.setAdjustmentTool(id)}>{label}</Button>)}
@@ -93,6 +95,7 @@ function CompositionPanelView({app, snapshot, instrument = false}) {
           {items.length > 1 ? `Reference design: ${tattoo.name}. Width scales editable designs proportionally; rotation applies the same angle change.` : 'Only the editable tattoo changes.'}
           {' Locked tattoos stay in place.'}{!canReanchor && items.length > 1 && ' Choose one tattoo to change its body area.'}
         </p>}
+        {mixedLocks && <Button variant="ghost" className="selection-unlock-inline" id="unlock-selection" disabled={ui.blocked} onClick={() => actions.lockSelection(false)}>Unlock {lockedCount} locked {lockedCount === 1 ? 'tattoo' : 'tattoos'}</Button>}
         <details className="control-details advanced-tattoo" open={instrument && ui.adjustmentTool === 'more' || undefined}>
           <summary>More adjustments</summary>
           <Field label="Tattoo name">
