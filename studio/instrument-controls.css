@@ -102,19 +102,19 @@ html[data-theme=instrument] :is(.composition-heading h2,.panel-intro h2,.section
   line-height: 1.4;
   letter-spacing: 0;
 }
-html[data-theme=instrument] .panel-intro { gap: 10px; margin-bottom: 12px; align-items: flex-start; }
+html[data-theme=instrument] .panel-intro { gap: 8px; margin-bottom: 8px; align-items: center; }
 html[data-theme=instrument] .selection-description { flex: 1; }
 html[data-theme=instrument] .panel-intro h2 { white-space: normal; overflow-wrap: anywhere; }
 html[data-theme=instrument] .selection-preview {
-  width: 42px;
-  height: 52px;
+  width: 32px;
+  height: 44px;
   border: 1px solid var(--line);
   border-radius: 3px;
   background: #fafaf5;
 }
 html[data-theme=instrument] .selection-lock { background: #e3e5dc; border-color: var(--line); }
-html[data-theme=instrument] .selection-focus > button { background: var(--panel); border-color: var(--line); color: var(--text); }
-html[data-theme=instrument] .selection-focus > button[aria-pressed=true] { background: var(--instrument-blue); color: #f5f6f0; border-color: #1d5066; }
+html[data-theme=instrument] #selection-detail { background: var(--panel); border-color: var(--line); color: var(--text); }
+html[data-theme=instrument] #selection-detail[aria-pressed=true] { background: var(--instrument-blue); color: #f5f6f0; border-color: #1d5066; }
 html[data-theme=instrument] .panel-intro .locked-size {
   margin-top: 6px;
   font: 12px/1.5 var(--mono);

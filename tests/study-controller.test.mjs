@@ -19,7 +19,7 @@ function fixture(options = {}) {
     workspace: {revision: 0, projects: [original], activeProjectId: original.id, assets: [{id: 'art'}]},
     convertingBody: false, ready: true, currentView: 'detail', conflict: false,
   };
-  const events = [], messages = [], writes = [], persisted = [], restored = [], reads = [];
+  const events = [], messages = [], writes = [], persisted = [], restored = [], reads = [], nameRequests = [];
   let camera = {position: [1, 1, 3], target: [0, 1, 0]};
   let stored = copy(state.workspace);
   let flushCount = 0, sceneCount = 0;
@@ -55,7 +55,10 @@ function fixture(options = {}) {
       assert.equal(path, 'workspace');
       return options.latest ? options.latest(copy(stored)) : copy(stored);
     },
-    async askName() { return Object.hasOwn(options, 'name') ? options.name : 'Alternative'; },
+    async askName(title, value) {
+      nameRequests.push({title, value});
+      return options.useSuggestedName ? value : Object.hasOwn(options, 'name') ? options.name : 'Alternative';
+    },
     placeMode(value) { events.push(['place', value]); },
     async chooseCamera(name) {
       state.currentView = name;
@@ -68,7 +71,7 @@ function fixture(options = {}) {
     setCameraSelection(name) { events.push(['selected-camera', name]); },
   };
   controller = createStudyController(state, services);
-  return {state, original, controller, services, events, messages, writes, persisted, restored, reads};
+  return {state, original, controller, services, events, messages, writes, persisted, restored, reads, nameRequests};
 }
 
 function assertReleased(f) {
@@ -275,6 +278,77 @@ test('failed project switch restores previous study and camera without saving fa
   assert.deepEqual(f.restored, [{position: [1, 1, 3], target: [0, 1, 0]}]);
   assert.equal(f.events.includes('schedule'), false);
   assertReleased(f);
+});
+
+test('default alternative identity stays first when a long source name is shortened', async () => {
+  const f = fixture({useSuggestedName: true});
+  f.original.name = 'A'.repeat(120);
+  assert.equal(await f.controller.saveAlternative(), true);
+  assert.equal(f.nameRequests[0].value, 'Copy — ' + 'A'.repeat(113));
+  assert.equal(f.controller.active().name, 'Copy — ' + 'A'.repeat(113));
+  assert.equal(f.original.name, 'A'.repeat(120));
+});
+
+test('alternatives of alternatives keep a single identity with the unique number first', async () => {
+  const f = fixture({useSuggestedName: true});
+  for (const expected of ['Copy — Original', 'Copy 2 — Original', 'Copy 3 — Original']) {
+    assert.equal(await f.controller.saveAlternative(), true);
+    assert.equal(f.controller.active().name, expected);
+  }
+  assert.equal(f.original.name, 'Original');
+  assert.equal(new Set(f.state.workspace.projects.map(study => study.name)).size, 4);
+});
+
+test('legacy alternative sources get a compact suggestion without renaming existing studies', async () => {
+  const f = fixture({useSuggestedName: true});
+  f.original.name = 'Original — alternative — alternative';
+  const before = copy(f.original);
+  assert.equal(await f.controller.saveAlternative(), true);
+  assert.equal(f.controller.active().name, 'Copy — Original');
+  assert.deepEqual(f.original, {...before, camera: {position: [1, 1, 3], target: [0, 1, 0]}});
+});
+
+test('earlier alternative prefixes stay only on existing studies when suggesting a short copy name', async () => {
+  for (const [name, expected] of [
+    ['Alternative — Original', 'Copy 2 — Original'],
+    ['Alternative 2 — Original', 'Copy 3 — Original'],
+    ['Copy 2 — Alternative — Original — alternative', 'Copy 3 — Original'],
+  ]) {
+    const f = fixture({useSuggestedName: true});
+    f.original.name = name;
+    assert.equal(await f.controller.saveAlternative(), true);
+    assert.equal(f.controller.active().name, expected);
+    assert.equal(f.original.name, name);
+  }
+});
+
+test('copying a shortened numbered alternative keeps its next number at the front', async () => {
+  const f = fixture({useSuggestedName: true});
+  f.original.name = 'A'.repeat(120);
+  for (const expected of [
+    'Copy — ' + 'A'.repeat(113),
+    'Copy 2 — ' + 'A'.repeat(111),
+    'Copy 3 — ' + 'A'.repeat(111),
+  ]) {
+    assert.equal(await f.controller.saveAlternative(), true);
+    assert.equal(f.controller.active().name, expected);
+  }
+});
+
+test('default names resolve collisions after shortening and keep Unicode characters whole', async () => {
+  const f = fixture({useSuggestedName: true});
+  f.original.name = '🌿'.repeat(120);
+  f.state.workspace.projects.push(project('Copy — ' + '🌿'.repeat(113)));
+  f.state.workspace.projects.push(project('Copy 2 — ' + '🌿'.repeat(111)));
+  assert.equal(await f.controller.saveAlternative(), true);
+  assert.equal(f.controller.active().name, 'Copy 3 — ' + '🌿'.repeat(111));
+  assert.equal(Array.from(f.controller.active().name).length, 120);
+});
+
+test('a custom alternative name is kept through the full Unicode name limit', async () => {
+  const f = fixture({name: '  ' + '🌿'.repeat(119) + 'é' + '  '});
+  assert.equal(await f.controller.saveAlternative(), true);
+  assert.equal(f.controller.active().name, '🌿'.repeat(119) + 'é');
 });
 
 test('alternative preserves exact placements and original, including preview failure', async () => {

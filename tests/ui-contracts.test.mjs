@@ -365,7 +365,7 @@ test('selection Detail remains a direct camera action when the inspector is expa
   props.snapshot.study.tattoos = [{id: 'one', name: 'Ink', assetId: 'art', width: 7, rotation: 0, visible: true}];
   props.snapshot.study.selectedIds = ['one'];
   const html = renderToStaticMarkup(React.createElement(CompositionPanel, props));
-  assert.match(html, /class="selection-focus"/);
+  assert.match(html, /id="selection-detail"[^>]*aria-label="Detail close-up"/);
   assert.match(html, /id="selection-detail"[^>]*aria-pressed="false"/);
   assert.ok(html.indexOf('id="selection-detail"') < html.indexOf('id="width"'));
   assert.equal(CompositionPanel.compare(props, withUI(props, {currentView: 'detail'})), false);
@@ -378,10 +378,9 @@ test('each primary group transform describes editable and excluded tattoos even 
     props.snapshot.study.tattoos = Array.from({length: editableCount + 1}, (_, i) => ({id: `ink-${i}`, name: `Ink ${i}`, assetId: 'art', width: 7, rotation: 0, visible: true, locked: i === editableCount}));
     props.snapshot.study.selectedIds = props.snapshot.study.tattoos.map(item => item.id);
     const html = renderToStaticMarkup(React.createElement(CompositionPanel, props));
-    for (const id of ['width', 'rotation']) {
-      assert.match(html, new RegExp(`role="group"[^>]*aria-describedby="${id}-scope"`));
-      assert.match(html, new RegExp(`id="${id}-scope" class="[^"]*group-edit-scope[^\"]*">${editableCount} editable · 1 locked`));
-    }
+    assert.equal((html.match(/role="group"[^>]*aria-describedby="selection-summary selection-adjustment-scope"/g) || []).length, 2);
+    assert.match(html, new RegExp(`id="selection-summary">${editableCount + 1} selected · ${editableCount} editable · 1 locked`));
+    assert.match(html, /id="selection-adjustment-scope"[^>]*>[\s\S]*Locked tattoos stay in place\./);
   }
 });
 

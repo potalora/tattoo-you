@@ -27,7 +27,11 @@ Instrument is the default presentation. The study selector, save recovery and hi
 
 Numeric fields accept exact values. Mixed selections describe their reference value and editable count; single-tattoo placement follows the connected body surface. Save failures remain visible with Retry, and preview failures distinguish saved work from unsaved edits. The Layer Actions disclosure stays inside the scrolling inspector. Long study and artwork names wrap.
 
+The Instrument selection header contains Detail and Lock; Width and Rotation precede placement controls and share one accessible group-scope explanation. Newly added artwork focuses Width. `ui/study-menu.js` owns native Study actions dismissal and listener cleanup. Alternative defaults use unique leading `Copy` labels within the existing name limit; saved names are never migrated.
+
 On phones, the controls panel has collapsed, normal and expanded stops. Only the dedicated top handle drags the sheet; sliders and artwork retain their own input. The actual animated height updates the workspace measurement while the sheet moves. Desktop transitions clear mobile height overrides. Motion owns interface animation, while the scene owns finite camera interpolation and returns to idle after it settles. Export settles the camera before capture.
+
+The existing viewport observer also publishes `--dock-live-height` for the framed Instrument stage. Feedback wrapping changes the frame reservation and camera boundary together without changing saved camera state or adding an observer.
 
 Reduced-motion preferences are observed live. Reduced transparency and increased contrast use opaque surfaces without backdrop filters. Forced colors retain system control colors. Keyboard interaction and focus restoration remain owned by Base UI or native controls.
 

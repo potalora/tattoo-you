@@ -39,6 +39,9 @@ export function observeViewportLayout({root,host,header,study,panel,dock,dockGro
   const fixedStatus=status&&status.dataset.idle!=='true'&&getComputedStyle(status).position==='fixed'?bounds(status):null;
   const topBoundary=Math.max(headerBounds?.bottom??0,fixedStatus?.bottom??0);
   const groupBounds=bounds(dockGroup)||bounds(dock);
+  // The framed Instrument stage follows the same measured controls boundary
+  // as the camera, including feedback that wraps at larger text sizes.
+  root.style?.setProperty('--dock-live-height',`${groupBounds?groupBounds.bottom-groupBounds.top:0}px`);
   const absoluteStatus=status&&status.dataset.idle!=='true'&&getComputedStyle(status).position==='absolute'?bounds(status):null;
   const dockBounds=absoluteStatus?{top:Math.min(groupBounds?.top??Infinity,absoluteStatus.top)}:groupBounds;
   const compact=window.matchMedia(COMPACT_LAYOUT_QUERY).matches;
@@ -53,5 +56,5 @@ export function observeViewportLayout({root,host,header,study,panel,dock,dockGro
  const changed=new MutationObserver(onChange);changed.observe(panel,{attributes:true,attributeFilter:['class','data-panel-state','data-panel-side']});changed.observe(root,{attributes:true,attributeFilter:['data-theme']});
  if(study)changed.observe(study,{attributes:true,attributeFilter:['hidden','class','style']});
  if(status)changed.observe(status,{attributes:true,attributeFilter:['data-idle','hidden','class','style']});
- return {measure,dispose(){resized.disconnect();changed.disconnect();}};
+ return {measure,dispose(){resized.disconnect();changed.disconnect();root.style?.removeProperty('--dock-live-height');}};
 }

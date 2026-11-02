@@ -9,6 +9,7 @@ import {BodyPanel} from './body-panel.jsx';
 import {ArtworkPreview} from './artwork-preview.jsx';
 import {Undo2, Redo2, Download, Check, Clock3, CircleAlert, Ellipsis, Orbit, Focus, UserRound, MoveHorizontal, RotateCcw} from 'lucide-react';
 import {Button, Select, Dialog, DialogContent, DialogTitle, DialogDescription, closeMenuThen} from './primitives.jsx';
+import {bindStudyMenuDismissal} from './study-menu.js';
 
 export function Header({app, snapshot, headerRef, studyRef, instrument = false}) {
   const {ui} = snapshot, a = app.actions;
@@ -38,7 +39,7 @@ export function StudyCard({app, snapshot, studyRef}) {
       onValueChange={a.switchProject} items={(workspace?.projects || []).map(p => ({value: p.id, label: p.name}))} /></div>
     <div className="study-save" data-save-state={saveState} role="status" title={ui.saveLabel} style={saveState === 'error' ? {color: 'var(--danger)'} : undefined}><SaveIcon size={14} aria-hidden="true" /><span id="save-status" className="sr-only">{ui.saveLabel}</span><span className="save-status-short" aria-hidden="true">{saveState === 'saved' ? 'Saved' : saveState === 'error' ? 'Unsaved' : 'Saving…'}</span><span className="storage-scope">{ui.storageMode === 'browser' || /this browser/.test(ui.saveLabel || '') ? 'This browser' : 'Shared workspace'}</span>
     </div>
-    <details className="project-menu"><summary aria-label="Study actions"><Ellipsis size={20} aria-hidden="true" /></summary>
+    <details ref={bindStudyMenuDismissal} className="project-menu"><summary aria-label="Study actions"><Ellipsis size={20} aria-hidden="true" /></summary>
       <div className="project-actions glass-surface">
         <Button variant="ghost" id="new-project" disabled={ui.blocked} onClick={e => menu(e, a.newProject)}>New study</Button>
         <Button variant="ghost" id="rename-project" disabled={ui.blocked} onClick={e => menu(e, a.renameProject)}>Rename</Button>
@@ -155,7 +156,7 @@ export function Inspector({app, snapshot, panelRef, instrument = false}) {
   const scrollRef = useRef(null), scrollPositions = useRef(new Map());
   const scrollKey = `${study?.id}:${ui.surface}`;
   useLayoutEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollPositions.current.get(scrollKey) || 0; }, [scrollKey]);
-  useEffect(() => { if (ui.focusPlacement) document.querySelector('#region')?.focus(); }, [ui.focusPlacement]);
+  useEffect(() => { if (ui.focusPlacement) document.querySelector(instrument ? '#width-number' : '#region')?.focus(); }, [ui.focusPlacement, instrument]);
   const labels = {normal: 'Expand', expanded: 'Canvas', collapsed: 'Controls'};
   return <motion.aside ref={panelRef} id="study-controls" tabIndex={-1} className={`controls-panel glass-surface ${ui.panelState === 'normal' ? '' : ui.panelState}`}
     style={{height: sheet.height}} data-sheet-dragging={sheet.dragging ? 'true' : undefined}

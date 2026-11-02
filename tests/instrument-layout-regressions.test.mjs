@@ -21,12 +21,14 @@ test('short landscape actionable status resets inherited top and remains anchore
  for(const [width,height] of [[667,375],[700,375],[844,390]]){const status=statusPosition(width,height);assert.equal(status.position,'absolute');assert.equal(status.top,'auto',`${width} must reset shared fixed-toast top`);assert.equal(length(status.bottom,height),50);}
 });
 test('short portrait has distinct sheet stops and preserves usable display space at each stop',()=>{
- for(const [width,height] of [[390,480],[320,568]]){
+ for(const [width,height] of [[390,460],[390,480],[320,568]]){
   const vars=rootVariables(width,height),normal=length(vars['--sheet-height'],height),expanded=Math.max(normal,length(vars['--expanded-height'],height)),collapsed=length(vars['--collapsed-height'],height);
   assert.ok(normal>collapsed);assert.ok(expanded>=normal+24,`${width}x${height}: Expand must enlarge controls`);
   const stageHeight=height-62-8;
   assert.ok(stageHeight-5-normal-88>=120,`${width}x${height}: normal retains useful canvas`);
   assert.ok(stageHeight-5-expanded-48>=120,`${width}x${height}: expanded retains useful canvas`);
  }
+ const shortest=rootVariables(390,426);
+ assert.ok(length(shortest['--expanded-height'],426)>=length(shortest['--sheet-height'],426)+24,'shorter portrait retains distinct sheet stops');
  for(const [width,height] of [[320,740],[390,844]]){const vars=rootVariables(width,height),expanded=length(vars['--expanded-height'],height);assert.ok(height-124-8-38-expanded-48>=220,'tall portrait adjustment keeps 220px display');}
 });

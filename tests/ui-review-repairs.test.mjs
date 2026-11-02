@@ -93,3 +93,14 @@ test('placing has a persistent labelled stop action in the stage independent of 
  assert.match(html,/id="stage-stop-placing"[^>]*>Stop placing<\/button>/);
  assert.doesNotMatch(html,/id="tattoo-controls"/);
 });
+test('group adjustment controls share one scope explanation while locked selection stays explicit',()=>{
+ const props=fixture();props.snapshot.study.selectedIds=['l0','l1','l2'];props.snapshot.study.tattoos[1].locked=true;props.snapshot.selection.canReanchor=false;
+ const html=render(CompositionPanel,{...props,instrument:true});
+ assert.match(html,/3 selected · 2 editable · 1 locked/);
+ assert.equal((html.match(/Locked tattoos stay in place\./g)||[]).length,1);
+ assert.equal((html.match(/Reference design:/g)||[]).length,1);
+ assert.match(html,/id="selection-adjustment-scope"/);
+ for(const label of ['Reference width (approx.)','Rotation'])assert.ok(html.includes(`role="group" aria-label="${label} adjustment" aria-describedby="selection-summary selection-adjustment-scope"`));
+ assert.match(html,/Choose one tattoo to change its body area/);
+ assert.match(/<button[^>]*id="place-on-body"[^>]*>/.exec(html)[0],/disabled/);
+});

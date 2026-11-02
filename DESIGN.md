@@ -145,6 +145,8 @@ Warm orange and functional blue/green sit within a muted, slightly green neutral
 - **Label:** compact field labels follow the label role. Guidance uses regular weight. Phone text, search, numeric and select controls use readable input type (16px).
 - **Mono:** exact values use tabular numerals; stage metadata uses a smaller measurement line (11px).
 
+Task feedback uses 13px text. Storage scope, layer measurements, fit guidance and phone camera labels use 12px. Allow feedback to wrap; the preview frame reserves the measured height of the feedback and camera controls.
+
 **The Task Scale Rule.** Keep large public-page typography out of editing controls. Long study and artwork names must wrap without displacing actions.
 
 ## Layout
@@ -152,6 +154,8 @@ Warm orange and functional blue/green sit within a muted, slightly green neutral
 The desktop editor uses a top study/history/export rail, a framed viewing stage and a separately scrolling right inspector. The standard inspector is fixed width (340px), reduced on tablet (310px). Outer clearance follows the workspace spacing token; the stage-to-inspector gap is compact (14px). Composition, Artwork and Body panels retain their state while hidden.
 
 At phone width (700px and below), the rail becomes two rows and controls become a bottom sheet with collapsed, normal and expanded stops. The dedicated handle alone owns dragging; the live animated sheet height determines the unobscured viewing area. Short landscape (height 500px and below) restores a side inspector. Short portrait retains a genuine sheet with a compact rail. Preserve safe-area clearance and the measured recovery-header allowance.
+
+The selected-tattoo header groups Detail and Lock actions. Width and Rotation come first, side by side on phones, so a single selected tattoo can be adjusted in the normal sheet. One shared explanation describes group edits and locked scope. New alternatives start with a short distinguishing label, `Copy` or `Copy 2`, before the source title; existing names stay intact.
 
 Public pages use a centered shell (maximum 1440px), generous outer gutters and heading/copy rows. These collapse to one column at 600px. They share materials and type, not the editor's fixed-canvas layout.
 
@@ -182,6 +186,8 @@ Paper-colored inset fields have thin borders, the control radius and an extremel
 ### Navigation
 
 Inspector tabs are solid keys: pale at rest, dark when selected with an orange lower edge. Camera keys select in blue. Select menus and dialogs retain Base UI keyboard, typeahead and focus behavior. Public navigation uses text links with visible focus and a dark studio entry action.
+
+Study actions closes on Escape and restores focus to its trigger. An outside pointer closes it while leaving focus with the destination control.
 
 ### Cards / Containers
 

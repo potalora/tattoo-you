@@ -36,14 +36,14 @@ html[data-theme=instrument] .stage { inset: 0 calc(var(--pane-width) + 14px) 0 0
 html[data-theme=instrument] .stage-top { position: absolute; inset: 0 0 auto; height: 58px; width: auto; padding: 9px 16px; margin: 0; overflow: hidden; clip-path: none; white-space: normal; background: var(--panel); border-bottom: 1px solid var(--line); }
 html[data-theme=instrument] .stage-top h1 { font-size: 15px; font-weight: 500; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 html[data-theme=instrument] .stage-top p { font: 11px/1.5 var(--mono); color: var(--muted); margin-top: 3px; }
-html[data-theme=instrument] #viewport { inset: 68px 10px 108px; border: 1px solid #b0b5ab; border-radius: 3px; overflow: hidden; background: var(--instrument-recess); }
+html[data-theme=instrument] #viewport { inset: 68px 10px calc(20px + var(--dock-live-height,88px)); border: 1px solid #b0b5ab; border-radius: 3px; overflow: hidden; background: var(--instrument-recess); }
 html[data-theme=instrument] .stage-bottom { left: 10px; right: 10px; bottom: 10px; height: 88px; gap: 5px; align-items: stretch; flex-direction: column-reverse; justify-content: flex-end; }
 html[data-theme=instrument] .stage-toolbar { width: 100%; }
 html[data-theme=instrument] .camera-bar { width: 100%; justify-content: center; gap: 6px; padding: 5px; border-radius: 4px; }
 html[data-theme=instrument] .camera-bar .ui-button { flex: 1; min-width: 44px; min-height: 48px; flex-direction: row; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 3px; background: #e4e7dc; font-size: 12px; color: var(--text); }
 html[data-theme=instrument] .camera-bar .ui-button[aria-pressed=true] { color: #f5f6f0; background: var(--instrument-blue); border-color: #1d5066; box-shadow: inset 0 1px 0 #ffffff30; }
 html[data-theme=instrument] #status,
-html[data-theme=instrument] #status[data-idle=true] { position: static; width: auto; height: auto; margin: 0; padding: 0 6px; max-width: 100%; max-height: 25px; clip-path: none; overflow: auto; white-space: normal; text-align: center; border: 0; background: transparent; color: #444d3c; font-size: 11px; line-height: 1.6; }
+html[data-theme=instrument] #status[data-idle=true] { position: static; width: auto; height: auto; margin: 0; padding: 0 6px; max-width: 100%; max-height: 40px; clip-path: none; overflow: auto; white-space: normal; text-align: center; border: 0; background: transparent; color: #444d3c; font-size: 13px; line-height: 1.4; }
 html[data-theme=instrument] .interaction-hint { display: none; }
 html[data-theme=instrument] .controls-panel { top: 0; right: 0; bottom: 0; width: var(--pane-width); height: auto; max-height: none; border: 1px solid #9da591; border-radius: 7px; }
 html[data-theme=instrument] .controls-top { padding: 7px; background: #d6d9ce; border-bottom: 1px solid var(--line); }
@@ -54,7 +54,7 @@ html[data-theme=instrument] .surface-tabs button[aria-pressed=true] span { color
 html[data-theme=instrument] .surface-tabs span { margin-left: 3px; font: 11px/1 var(--mono); }
 html[data-theme=instrument] .controls-scroll { padding: 16px 12px; scrollbar-color: #8c9680 transparent; }
 html[data-theme=instrument] .controls-scroll::-webkit-scrollbar-thumb { background: #9ca58f; }
-html[data-theme=instrument] .history-bar { padding: 10px 12px; border-top: 1px solid var(--line); background: #e5e7de; color: var(--muted); font-size: 10px; }
+html[data-theme=instrument] .history-bar { padding: 10px 12px; border-top: 1px solid var(--line); background: #e5e7de; color: var(--muted); font-size: 12px; line-height: 1.4; }
 html[data-theme=instrument] #engine { font-family: var(--mono); }
 html[data-theme=instrument] footer { display: none; }
 html[data-theme=instrument] :is(button,input,textarea,summary,a,.select-trigger):focus-visible { outline: 2px solid var(--instrument-blue); outline-offset: 3px; }
@@ -76,7 +76,7 @@ html[data-theme=instrument] :is(button,input,textarea,summary,a,.select-trigger)
   html[data-theme=instrument] .stage-top { height: 42px; padding: 5px 12px; }
   html[data-theme=instrument] .stage-top h1 { font-size: 12px; }
   html[data-theme=instrument] .stage-top p { font-size: 10px; margin-top: 1px; }
-  html[data-theme=instrument] #viewport { inset: 50px 8px 84px; }
+  html[data-theme=instrument] #viewport { inset: 50px 8px calc(16px + var(--dock-live-height,68px)); }
   html[data-theme=instrument] .stage-bottom { left: 8px; right: 8px; bottom: 8px; height: 68px; gap: 2px; }
   html[data-theme=instrument] .camera-bar { height: 50px; padding: 3px; }
   html[data-theme=instrument] .camera-bar .ui-button { min-height: 44px; flex-direction: row; gap: 4px; }
@@ -106,9 +106,9 @@ html[data-theme=instrument] :is(button,input,textarea,summary,a,.select-trigger)
   html[data-theme=instrument] .stage-bottom,
   html[data-theme=instrument] .workspace:has(.controls-panel:is(.collapsed,.expanded)) .stage-bottom { left: 5px; right: 5px; bottom: calc(var(--sheet-live-height,var(--sheet-height)) + 4px); height: 74px; gap: 1px; }
   html[data-theme=instrument] .camera-bar { padding: 3px; gap: 4px; height: 54px; }
-  html[data-theme=instrument] .camera-bar .ui-button { min-height: 44px; flex-direction: column; gap: 1px; padding: 2px 3px; font-size: 10px; }
+  html[data-theme=instrument] .camera-bar .ui-button { min-height: 44px; flex-direction: column; gap: 1px; padding: 2px 3px; font-size: 12px; }
   html[data-theme=instrument] #status,
-  html[data-theme=instrument] #status[data-idle=true] { max-height: 17px; font-size: 10px; }
+  html[data-theme=instrument] #status[data-idle=true] { max-height: 36px; font-size: 13px; }
   html[data-theme=instrument] .loading { top: calc(50% - var(--sheet-live-height,var(--sheet-height)) / 2 - 16px); max-width: calc(100% - 20px); }
   html[data-theme=instrument] .controls-panel { top: auto; left: 0; right: 0; bottom: 0; width: auto; height: var(--sheet-height); border-radius: 6px; }
   html[data-theme=instrument] .controls-top { padding: 3px 5px 8px; gap: 4px; }
@@ -145,13 +145,14 @@ html[data-theme=instrument] .art-card .add-art { width: auto; min-width: 62px; }
   html[data-theme=instrument] .stage-top { height: 33px; padding-block: 4px; }
   html[data-theme=instrument]:has(.save-recovery:not([hidden])) .stage-top { visibility: hidden; }
   html[data-theme=instrument] .stage-top p { display: none; }
-  html[data-theme=instrument] #viewport { top: 38px; bottom: calc(var(--sheet-live-height,var(--sheet-height)) + 88px); }
-  html[data-theme=instrument] .stage-bottom { bottom: calc(var(--sheet-live-height,var(--sheet-height)) + 4px); min-height: 78px; gap: 1px; }
+  html[data-theme=instrument] #viewport { top: 38px; bottom: calc(var(--sheet-live-height,var(--sheet-height)) + var(--dock-live-height,78px) + 10px); }
+  html[data-theme=instrument] .stage-bottom,
+  html[data-theme=instrument] .workspace:has(.controls-panel:is(.collapsed,.expanded)) .stage-bottom { bottom: calc(var(--sheet-live-height,var(--sheet-height)) + 4px); height: auto; min-height: 78px; gap: 1px; }
   html[data-theme=instrument] .workspace:has(.controls-panel.expanded) .stage-bottom { height: auto; min-height: 0; overflow: visible; }
-  html[data-theme=instrument] .workspace:has(.controls-panel.expanded) #viewport { bottom: calc(var(--sheet-live-height,var(--expanded-height)) + 48px); }
+  html[data-theme=instrument] .workspace:has(.controls-panel.expanded) #viewport { bottom: calc(var(--sheet-live-height,var(--expanded-height)) + var(--dock-live-height,38px) + 10px); }
   html[data-theme=instrument] .workspace:has(.controls-panel.expanded):has(#status:is([data-idle=true],[hidden])) #viewport { bottom: calc(var(--sheet-live-height,var(--expanded-height)) + 8px); }
   html[data-theme=instrument] #status[data-idle=true] { display: none; }
-  html[data-theme=instrument] #status:not([data-idle=true]) { max-height: none; font-size: 11px; }
+  html[data-theme=instrument] #status:not([data-idle=true]) { max-height: none; font-size: 13px; }
   html[data-theme=instrument] .controls-panel .controls-scroll { padding: 8px 10px 14px; }
   html[data-theme=instrument] .controls-panel[data-surface=artwork] .artwork { margin-top: 6px; gap: 8px; }
   html[data-theme=instrument] .controls-panel[data-surface=artwork] .library-search { gap: 2px; }
@@ -183,9 +184,9 @@ html[data-theme=instrument] .art-card .add-art { width: auto; min-width: 62px; }
   html[data-theme=instrument] .workspace:has(.controls-panel:is(.expanded,.collapsed)) .stage-bottom { left: 5px; right: 5px; bottom: 5px; min-height: 50px; height: auto; overflow: visible; gap: 2px; }
   html[data-theme=instrument] .stage-toolbar { height: auto; }
   html[data-theme=instrument] .camera-bar { height: 48px; gap: 1px; padding: 1px; }
-  html[data-theme=instrument] .camera-bar .ui-button { min-width: 44px; min-height: 44px; flex-direction: column; gap: 0; font-size: 10px; padding: 2px; }
+  html[data-theme=instrument] .camera-bar .ui-button { min-width: 44px; min-height: 44px; flex-direction: column; gap: 0; font-size: 12px; padding: 2px; }
   html[data-theme=instrument] .camera-bar svg { display: none; }
-  html[data-theme=instrument] #status:not([data-idle=true]) { position: absolute; top: auto; bottom: 50px; left: 0; right: 0; max-width: none; margin: 0; padding: 5px; background: var(--panel); border: 1px solid var(--line); font-size: 11px; }
+  html[data-theme=instrument] #status:not([data-idle=true]) { position: absolute; top: auto; bottom: 50px; left: 0; right: 0; max-width: none; margin: 0; padding: 5px; background: var(--panel); border: 1px solid var(--line); font-size: 13px; }
   html[data-theme=instrument] #status[data-idle=true] { display: none; }
   html[data-theme=instrument] .controls-panel,
   html[data-theme=instrument] .controls-panel:is(.expanded,.collapsed,[data-panel-state]) { top: 0; left: auto; right: 0; bottom: 0; width: var(--pane-width); height: auto; max-height: none; }
@@ -211,11 +212,17 @@ html[data-theme=instrument] .art-card .add-art { width: auto; min-width: 62px; }
   html[data-theme=instrument] .stage-top { display: none; }
   html[data-theme=instrument] #viewport { top: 5px; }
   html[data-theme=instrument] .sheet-drag-handle { height: 12px; }
+  html[data-theme=instrument] .controls-top { padding-bottom: 4px; }
   html[data-theme=instrument] .controls-panel[data-surface=artwork] #art-results { position: absolute; width: 1px; height: 1px; clip-path: inset(50%); overflow: hidden; }
   html[data-theme=instrument] .controls-panel[data-surface=artwork] .artwork { margin-top: 4px; }
   html[data-theme=instrument] .controls-panel[data-surface=artwork] .preview-art { display: flex; align-items: center; gap: 6px; padding: 3px; }
   html[data-theme=instrument] .controls-panel[data-surface=artwork] .art-paper { flex: none; width: 40px; height: 40px; padding: 3px; }
   html[data-theme=instrument] .controls-panel[data-surface=artwork] .art-card strong { min-width: 0; margin-top: 0; text-align: left; }
+}
+
+/* Fit exact fields where there is room without collapsing smaller sheet stops. */
+@media (max-width: 700px) and (min-height: 480px) and (max-height: 600px) and (orientation: portrait) {
+  html[data-theme=instrument] { --sheet-height: max(196px,38dvh); }
 }
 
 /* Side inspectors share the framed stage's header boundary. A recovery row
@@ -229,4 +236,21 @@ html[data-theme=instrument] .art-card .add-art { width: auto; min-width: 62px; }
 @media (max-width: 700px) and (max-height: 600px) and (orientation: portrait) {
   /* Study identity and storage keep their width; history remains in Study actions. */
   html[data-theme=instrument] .instrument-history { display: none; }
+}
+
+/* The same two precise adjustments lead the inspector on both devices.
+   A phone pairs them so normal-sheet users can reach both values immediately. */
+@media (max-width: 700px) and (min-height: 501px), (max-width: 700px) and (orientation: portrait) {
+  html[data-theme=instrument] .selection-actions > button { width: 44px; padding: 8px; }
+  html[data-theme=instrument] #selection-detail > span { display: none; }
+  html[data-theme=instrument] .primary-transforms { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+  html[data-theme=instrument] .primary-transform { min-width: 0; margin-block: 0; }
+  html[data-theme=instrument] .primary-transform .range-control { height: 100%; grid-template-columns: minmax(0,1fr); grid-template-rows: auto 44px 44px; gap: 0; align-items: stretch; }
+  html[data-theme=instrument] .primary-transform .range-control > label { align-self: end; min-height: 18px; margin-bottom: 4px; font-size: 13px; line-height: 1.4; }
+  html[data-theme=instrument] .primary-transform .range-exact { grid-template-columns: minmax(0,1fr) 3.5ch; gap: 4px; font-size: 12px; }
+  html[data-theme=instrument] .primary-transform .range-exact input { width: 100%; min-width: 0; }
+  html[data-theme=instrument] .placement-row { flex-wrap: nowrap; gap: 8px; margin-block: 8px; }
+  html[data-theme=instrument] .placement-row .field { flex: 1; flex-basis: auto; gap: 4px; font-size: 13px; }
+  html[data-theme=instrument] .placement-action { min-width: 44px; padding-inline: 8px; }
+  html[data-theme=instrument] .placement-action > span { max-width: 8ch; white-space: normal; }
 }

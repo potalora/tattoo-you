@@ -46,7 +46,7 @@ The public name is **tattoo you**. Preserve the chosen Instrument aesthetic and 
 - Help people compare placement and communicate with their artist without promising exact body fit.
 - Keep artwork ownership and local storage understandable; preserve backup and recovery access.
 - Preserve reversible editing, exact adjustments and truthful save/error states.
-- Keep body inspection and editing usable across desktop and phone layouts.
+- Treat desktop and phone as equal acceptance targets for import, placement, exact adjustment, layers, alternatives and export.
 
 ## Accessibility & Inclusion
 

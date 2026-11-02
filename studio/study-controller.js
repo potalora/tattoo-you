@@ -76,14 +76,32 @@ export function createStudyController(state, services) {
     scheduleSave();
   }
 
+  function alternativeName() {
+    // Recognize old and current defaults only when suggesting a new name;
+    // existing studies and a user's submitted name are never rewritten.
+    const name = active().name.trim();
+    const previousAlternative = /^(?:Copy|Alternative)(?: ([1-9]\d*))? — /.exec(name);
+    const previousNumber = previousAlternative ? Number(previousAlternative[1] || 1) : 0;
+    const firstNumber = previousNumber < STORAGE_LIMITS.maxProjects ? previousNumber + 1 : 1;
+    const source = name
+      .replace(/^(?:(?:Copy|Alternative)(?: [1-9]\d*)? — )+/, '')
+      .replace(/(?: — alternative)+$/, '');
+    const names = new Set(state.workspace.projects.map(study => study.name));
+    for (let number = firstNumber; ; number++) {
+      const prefix = number === 1 ? 'Copy — ' : `Copy ${number} — `;
+      const candidate = (prefix + Array.from(source).slice(0, 120 - prefix.length).join('')).trimEnd();
+      if (!names.has(candidate)) return candidate;
+    }
+  }
+
   async function saveAlternative() {
     if (state.convertingBody || !hasStudyCapacity()) return false;
-    const name = await askName('Create an alternative', (active().name + ' — alternative').slice(0, 120), {
+    const name = await askName('Create an alternative', alternativeName(), {
       submitLabel: 'Create alternative', description: 'Create a separate study. Your original is kept.',
     });
     if (!name?.trim()) return false;
     const study = copy(active());
-    study.id = uid(); study.name = name.trim().slice(0, 120);
+    study.id = uid(); study.name = Array.from(name.trim()).slice(0, 120).join('');
     if (!canAddStudy(study)) return false;
     const wasReady = state.ready;
     state.convertingBody = true;

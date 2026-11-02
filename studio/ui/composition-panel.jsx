@@ -26,7 +26,7 @@ function CompositionPanelView({app, snapshot, instrument = false}) {
     : chosen.length === 1
     ? `${chosen[0].existing ? 'Existing tattoo' : 'New tattoo'}`
     : chosen.length
-    ? `${chosen.length} selected · ${items.length} editable · ${chosen.length - items.length} locked${hasLocked ? '. Unlock to adjust locked tattoos.' : items.length > 1 ? '. Changes apply as a group.' : ''}`
+    ? `${chosen.length} selected · ${items.length} editable · ${chosen.length - items.length} locked`
     : hasTattoos ? 'Select a tattoo below to adjust its placement.' : 'Add artwork, choose a body area, then adjust width.';
 
   const menuAction = closeMenuThen;
@@ -58,27 +58,28 @@ function CompositionPanelView({app, snapshot, instrument = false}) {
         <p id="selection-summary">{summary}</p>
         {hasLocked && !items.length && chosen.length === 1 && <p className="locked-size">Width: {chosen[0].width.toFixed(1)} cm (approx.)</p>}
         </div>
-        <Button variant="ghost" className="selection-lock" id="lock-selection" aria-label="Lock in place" title="Lock in place" hidden={!items.length} disabled={disabled} onClick={() => actions.lockSelection(true)}><LockKeyhole size={18} aria-hidden="true" /></Button>
+        <div className="selection-actions">
+          {!!chosen.length && <Button variant="secondary" id="selection-detail" aria-label="Detail close-up" title="Detail close-up" aria-pressed={ui.currentView === 'detail'} disabled={ui.blocked || !ui.ready}
+            onClick={() => actions.chooseCamera('detail')}><Focus size={17} aria-hidden="true" /><span>Detail</span></Button>}
+          <Button variant="ghost" className="selection-lock" id="lock-selection" aria-label="Lock in place" title="Lock in place" hidden={!items.length} disabled={disabled} onClick={() => actions.lockSelection(true)}><LockKeyhole size={18} aria-hidden="true" /></Button>
+        </div>
       </div>
-      {!!chosen.length && <div className="selection-focus">
-        <Button variant="secondary" id="selection-detail" aria-pressed={ui.currentView === 'detail'} disabled={ui.blocked || !ui.ready}
-          onClick={() => actions.chooseCamera('detail')}><Focus size={17} aria-hidden="true" />Detail close-up</Button>
-      </div>}
       <Button variant="secondary" id="unlock-selection" hidden={!hasLocked} disabled={ui.blocked || !hasLocked} onClick={() => actions.lockSelection(false)}>Unlock to adjust</Button>
       <div id="tattoo-controls" hidden={!items.length}>
+        <div className="primary-transforms">
+          {[['width', items.length > 1 ? 'Reference width (approx.)' : 'Width (approx.)', .5, 40, .1], ['rotation', 'Rotation', -180, 180, 1]].map(([id, label, min, max, step]) => <div key={id} className="primary-transform" role="group" aria-label={`${label} adjustment`} aria-describedby={chosen.length > 1 ? 'selection-summary selection-adjustment-scope' : undefined}>
+            {range(id, label, min, max, step)}
+          </div>)}
+        </div>
         <div className="placement-row"><Field label="Body area">
           <Select id="region" aria-label="Body area" value={tattoo?.region || 'leftUpperArm'} disabled={disabled || !canReanchor} onValueChange={actions.setRegion}
             items={[...REGIONS.map(region => ({value: region.id, label: region.label})), {value: 'custom', label: 'Custom · tap on body'}]} />
         </Field>
         <Button id="place-on-body" className="secondary placement-action" aria-label={ui.placing ? 'Stop placing' : 'Place on body'} title={ui.placing ? 'Stop placing (Escape)' : 'Place on body'} disabled={disabled || !canReanchor} aria-pressed={ui.placing} onClick={actions.togglePlace}><Crosshair size={19} aria-hidden="true" /><span>{ui.placing ? 'Stop placing' : 'Place on body'}</span></Button></div>
-        {!canReanchor && items.length > 1 && <p className="hint group-reference">Choose one tattoo to change its body area. Move, rotate, or scale the group with the adjustment controls.</p>}
-        {items.length > 1 && <p className="hint group-reference">Reference design: {tattoo.name}. Width scales editable designs proportionally; rotation applies the same angle change. Locked tattoos stay in place.</p>}
-        <div className="primary-transforms">
-          {[['width', items.length > 1 ? 'Reference width (approx.)' : 'Width (approx.)', .5, 40, .1], ['rotation', 'Rotation', -180, 180, 1]].map(([id, label, min, max, step]) => <div key={id} className="primary-transform" role="group" aria-label={`${label} adjustment`} aria-describedby={chosen.length > 1 ? `${id}-scope` : undefined}>
-            {chosen.length > 1 && <p id={`${id}-scope`} className="hint group-edit-scope">{items.length} editable · {chosen.length - items.length} locked. {items.length > 1 ? 'Changes apply to the editable group.' : 'Only the editable tattoo changes.'} Locked tattoos stay in place.</p>}
-            {range(id, label, min, max, step)}
-          </div>)}
-        </div>
+        {chosen.length > 1 && <p id="selection-adjustment-scope" className="hint group-reference">
+          {items.length > 1 ? `Reference design: ${tattoo.name}. Width scales editable designs proportionally; rotation applies the same angle change.` : 'Only the editable tattoo changes.'}
+          {' Locked tattoos stay in place.'}{!canReanchor && items.length > 1 && ' Choose one tattoo to change its body area.'}
+        </p>}
         <details className="control-details advanced-tattoo">
           <summary>More adjustments</summary>
           <Field label="Tattoo name">
@@ -98,7 +99,7 @@ function CompositionPanelView({app, snapshot, instrument = false}) {
           </div>
           {range('opacity', 'Ink intensity', .1, 1, .01)}
           <label className="check"><input id="flip" type="checkbox" checked={!!tattoo?.flip} disabled={disabled} onChange={event => actions.setFlip(event.target.checked)} /> Mirror selected artwork</label>
-          <p className="hint">Group edits preserve each design’s relative size and spacing. Placement is a visual guide.</p>
+          <p className="hint">Placement is a visual guide.</p>
         </details>
       </div>
     </div>
@@ -115,7 +116,7 @@ function CompositionPanelView({app, snapshot, instrument = false}) {
               <Button variant="ghost" id="duplicate-layers" disabled={disabled} onClick={event => menuAction(event, actions.duplicateLayers)}>Duplicate</Button>
               <Button variant="ghost" id="remove-layers" disabled={disabled} onClick={event => menuAction(event, actions.removeLayers)}>Remove</Button>
             </div>
-            <p className="hint">Select several tattoos to edit together. Locked tattoos stay in place.</p>
+            <p className="hint">Select several tattoos to edit together.</p>
           </div>
         </details>
       <div id="layers" className="layers">
