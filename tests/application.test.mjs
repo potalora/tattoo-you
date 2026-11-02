@@ -721,3 +721,25 @@ test('pending artwork deletion blocks edits and successful deletion clears histo
   assert.equal(h.app.getSnapshot().study.tattoos.length, 0);
   assert.equal(await h.app.flush(), true);
 });
+
+test('contextual editing and collection navigation keep study data and history intact', async t => {
+  const h = harness(); t.after(() => h.app.dispose()); await h.mount();
+  const before = h.app.getSnapshot().study;
+  assert.equal(h.app.actions.setAdjustmentTool('rotate'), true);
+  assert.equal(h.app.getSnapshot().ui.adjustmentTool, 'rotate');
+  assert.equal(h.app.actions.setAdjustmentTool('invalid'), false);
+  h.app.actions.showSurface('collection');
+  assert.equal(h.app.getSnapshot().ui.surface, 'collection');
+  assert.deepEqual(h.app.getSnapshot().study, before);
+  assert.equal(h.app.getSnapshot().ui.canUndo, false);
+});
+
+test('adding artwork opens an immediate detail view and a single active adjustment', async t => {
+  const h = harness(); t.after(() => h.app.dispose()); await h.mount();
+  h.app.actions.setAdjustmentTool('rotate');
+  h.app.actions.addArtwork(h.asset.id);
+  await until(() => h.app.getSnapshot().ui.currentView === 'detail');
+  assert.equal(h.app.getSnapshot().ui.adjustmentTool, 'place');
+  assert.equal(h.app.getSnapshot().ui.surface, 'composition');
+  assert.match(h.app.getSnapshot().ui.status, /body area|Place on body/);
+});

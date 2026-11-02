@@ -149,6 +149,17 @@ test('layout observers retain toolbar-only fallback when no visible controls gro
  assert.equal(layout.measure().y+layout.measure().height,626);
  layout.dispose();
 });
+test('framed stage follows the full dock height as feedback wraps and clears it on disposal',t=>{
+ const {element,host}=observedLayout(t),values=new Map();
+ const root={style:{setProperty:(key,value)=>values.set(key,value),removeProperty:key=>values.delete(key)}};
+ const dockGroup=element(600,688),dock=element(632,686);
+ const layout=observeViewportLayout({root,host,header:element(0,80),panel:element(96,700,340),dock,dockGroup,onChange(){}});
+ layout.measure();assert.equal(values.get('--dock-live-height'),'88px');
+ dockGroup.top=564;layout.measure();assert.equal(values.get('--dock-live-height'),'124px','wrapped feedback expands the frame reservation');
+ dockGroup.visible=false;layout.measure();assert.equal(values.get('--dock-live-height'),'54px','toolbar fallback uses its visible height');
+ dock.visible=false;layout.measure();assert.equal(values.get('--dock-live-height'),'0px','hidden controls leave no reservation');
+ layout.dispose();assert.equal(values.has('--dock-live-height'),false);
+});
 test('layout observes both studio surfaces and follows mobile rail and sheet changes',async t=>{
  for(const compact of [false,true])await t.test(compact?'mobile rail':'desktop study',t=>{
   const {element,host,observers}=observedLayout(t,{width:compact?390:1440,height:compact?844:900,compact});

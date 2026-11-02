@@ -16,6 +16,7 @@
         "studio/workspace-files.js",
         "studio/workspace-sync.js",
         "studio/study-controller.js",
+        "studio/study-comparison.js",
         "studio/viewport-layout.js",
         "studio/body-controls.js",
         "studio/model.js",

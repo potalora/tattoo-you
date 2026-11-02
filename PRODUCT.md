@@ -31,11 +31,14 @@ The public static app opens at `/studio/`. Import a tightly cropped transparent 
 - PNG reference export and JSON backup are separate downloads. PDF and 3D model exports are not implemented. Photos of tattoos on skin need preparation outside the app.
 - JavaScript, IndexedDB and WebGPU or WebGL2 are required. Fonts, models and rendering dependencies are served by the site.
 - React owns interface state; Three.js owns one canvas and its resources. Preserve the canvas lifecycle, editing history, revision-aware saving and camera/export coordination. See `docs/frontend.md` for implementation boundaries.
-- Phones use a controls sheet with three stops and a dedicated drag handle. Controls and artwork keep their own gestures. Short landscape uses a side inspector.
+- Phones use a contextual Place / Size / Rotate / View / More deck with three sheet stops and a dedicated drag handle. The tattoo collection is independently reachable. Controls and artwork keep their own gestures; short landscape uses a side inspector.
+- Empty studies offer Reference → Artwork → Placement without a compulsory wizard. Import opens a close-up. Anatomy and starting profile come before fine proportion adjustments.
+- Visual comparison captures two studies with matching body settings at the same camera pose. Desktop shows paired previews; phones switch A/B. The live study, saved cameras and history remain independent.
+- Reference review shows the exact PNG offered for download, including its placement notes. In-dialog inspection offers Fit, 100%, zoom and mouse, touch or keyboard panning; download confirmation stays beside the action. Direct PNG download remains available in Study actions; another angle is prepared by returning to editing.
 
 ## Brand Commitments
 
-The public name is **tattoo you**. Preserve the chosen Instrument aesthetic and concise, practical copy. Legacy Inkform storage names and backup formats are compatibility details, not a second public product identity. Do not add unsupported claims or substitute a new visual direction during refinement.
+The public name is **tattoo you**. The visual direction is emphatically **Instrument**, inspired by Teenage Engineering: opaque control surfaces, tactile keys, recessed display framing, precise type and deliberate orange accents. Preserve that identity and concise, practical copy as workflows evolve. Legacy Inkform storage names and backup formats are compatibility details, not a second public product identity. Do not add unsupported claims or substitute a new visual direction during refinement.
 
 ## Evidence on Hand
 
@@ -46,7 +49,7 @@ The public name is **tattoo you**. Preserve the chosen Instrument aesthetic and 
 - Help people compare placement and communicate with their artist without promising exact body fit.
 - Keep artwork ownership and local storage understandable; preserve backup and recovery access.
 - Preserve reversible editing, exact adjustments and truthful save/error states.
-- Keep body inspection and editing usable across desktop and phone layouts.
+- Treat desktop and phone as equal acceptance targets for import, placement, exact adjustment, layers, alternatives and export.
 
 ## Accessibility & Inclusion
 

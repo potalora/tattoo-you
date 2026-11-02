@@ -3,12 +3,14 @@ import {createRoot} from 'react-dom/client';
 import {animate, motion, useMotionValue} from 'motion/react';
 import {StudioMotionProvider, useStudioReducedMotion, useStudioCompact, UI_SPRING} from './motion.jsx';
 import {sheetDragHeight, sheetSnapState} from './sheet-gesture.js';
-import {CompositionPanel} from './composition-panel.jsx';
+import {CompositionPanel, TattooCollection} from './composition-panel.jsx';
+import {JourneyDialogs} from './journey-panels.jsx';
 import {ArtworkPanel} from './artwork-panel.jsx';
 import {BodyPanel} from './body-panel.jsx';
 import {ArtworkPreview} from './artwork-preview.jsx';
-import {Undo2, Redo2, Download, Check, Clock3, CircleAlert, Ellipsis, Orbit, Focus, UserRound, MoveHorizontal, RotateCcw} from 'lucide-react';
+import {Undo2, Redo2, Download, Check, Clock3, CircleAlert, Ellipsis, Orbit, Focus, UserRound, MoveHorizontal, RotateCcw, Columns2, Plus} from 'lucide-react';
 import {Button, Select, Dialog, DialogContent, DialogTitle, DialogDescription, closeMenuThen} from './primitives.jsx';
+import {bindStudyMenuDismissal} from './study-menu.js';
 
 export function Header({app, snapshot, headerRef, studyRef, instrument = false}) {
   const {ui} = snapshot, a = app.actions;
@@ -21,8 +23,9 @@ export function Header({app, snapshot, headerRef, studyRef, instrument = false})
         <Button variant="ghost" id="instrument-undo" aria-label="Undo" title="Undo (⌘Z)" disabled={ui.blocked || !ui.canUndo} onClick={a.undo}><Undo2 size={18} aria-hidden="true" /></Button>
         <Button variant="ghost" id="instrument-redo" aria-label="Redo" title="Redo (⇧⌘Z)" disabled={ui.blocked || !ui.canRedo} onClick={a.redo}><Redo2 size={18} aria-hidden="true" /></Button>
       </div>}
-      <Button variant="ghost" id="save-image" className="save-image" aria-label="Export image" title="Download a reference image" disabled={ui.blocked || !ui.ready} onClick={a.saveImage}>
-        <Download size={16} aria-hidden="true" /><span className="save-label-wide">Export image</span><span className="save-label-compact" aria-hidden="true">Export</span>
+      {instrument && <Button variant="secondary" id="compare-studies" aria-label="Compare studies" title="Compare placements" disabled={ui.blocked || !ui.ready || !snapshot.study?.tattoos.length} onClick={a.openComparison}><Columns2 size={18} aria-hidden="true" /><span>Compare</span></Button>}
+      <Button variant="ghost" id="save-image" className="save-image" aria-label={instrument ? 'Review reference' : 'Export image'} title={instrument ? 'Review and download a reference' : 'Download a reference image'} disabled={ui.blocked || !ui.ready || (instrument && !snapshot.study?.tattoos.length)} onClick={instrument ? a.reviewReference : a.saveImage}>
+        <Download size={16} aria-hidden="true" /><span className="save-label-wide">{ui.reviewBusy ? 'Preparing…' : instrument ? 'Reference' : 'Export image'}</span><span className="save-label-compact" aria-hidden="true">{instrument ? 'Reference' : 'Export'}</span>
       </Button>
     </div>
   </header>;
@@ -38,11 +41,12 @@ export function StudyCard({app, snapshot, studyRef}) {
       onValueChange={a.switchProject} items={(workspace?.projects || []).map(p => ({value: p.id, label: p.name}))} /></div>
     <div className="study-save" data-save-state={saveState} role="status" title={ui.saveLabel} style={saveState === 'error' ? {color: 'var(--danger)'} : undefined}><SaveIcon size={14} aria-hidden="true" /><span id="save-status" className="sr-only">{ui.saveLabel}</span><span className="save-status-short" aria-hidden="true">{saveState === 'saved' ? 'Saved' : saveState === 'error' ? 'Unsaved' : 'Saving…'}</span><span className="storage-scope">{ui.storageMode === 'browser' || /this browser/.test(ui.saveLabel || '') ? 'This browser' : 'Shared workspace'}</span>
     </div>
-    <details className="project-menu"><summary aria-label="Study actions"><Ellipsis size={20} aria-hidden="true" /></summary>
+    <details ref={bindStudyMenuDismissal} className="project-menu"><summary aria-label="Study actions"><Ellipsis size={20} aria-hidden="true" /></summary>
       <div className="project-actions glass-surface">
         <Button variant="ghost" id="new-project" disabled={ui.blocked} onClick={e => menu(e, a.newProject)}>New study</Button>
         <Button variant="ghost" id="rename-project" disabled={ui.blocked} onClick={e => menu(e, a.renameProject)}>Rename</Button>
         <Button variant="ghost" id="duplicate-project" disabled={ui.blocked} onClick={e => menu(e, a.saveAlternative)}>Save alternative…</Button>
+        <Button variant="ghost" id="direct-export" disabled={ui.blocked || !study?.tattoos.length} onClick={e => menu(e, a.saveImage)}>Download PNG now</Button>
         <Button variant="ghost" id="notes-open" disabled={ui.blocked} onClick={e => menu(e, () => a.openDialog('notes'))}>Notes…</Button>
         <div className="menu-history" hidden={!ui.canUndo && !ui.canRedo}>
           <Button variant="ghost" id="undo" disabled={ui.blocked || !ui.canUndo} title="Undo (⌘Z)" onClick={e => menu(e, a.undo)}><Undo2 size={16} aria-hidden="true" />Undo</Button>
@@ -63,20 +67,22 @@ export function StudyCard({app, snapshot, studyRef}) {
 
 export function CameraDock({app, snapshot, dockRef, dockGroupRef, statusRef}) {
   const {ui} = snapshot, a = app.actions;
+  const instrument = ui.presentation === 'instrument';
   const compact = useStudioCompact(), reduce = useStudioReducedMotion(), expanded = compact && ui.panelState === 'expanded';
-  const hideCamera = expanded || (compact && ui.placing);
+  const contextual = compact && instrument && ui.surface === 'composition' && snapshot.selection?.editableCount > 0 && ui.panelState !== 'collapsed';
+  const hideCamera = expanded || contextual || (compact && ui.placing);
   const statusText = ui.placing ? 'Tap visible skin to place this tattoo.' : ui.previewError ? 'Preview unavailable. Try again to reload the preview.' : ui.saveFailure && ui.status === ui.saveFailure ? '' : ui.status;
   const idle = !ui.placing && /^Drag to orbit/.test(statusText || '');
   const camera = (name, label, Icon) => <Button key={name} variant="ghost" data-camera={name} aria-pressed={ui.currentView === name}
     disabled={ui.blocked || !ui.ready} onClick={() => a.chooseCamera(name)}><Icon size={17} aria-hidden="true" /><span>{label}</span></Button>;
-  return <div className="stage-bottom" ref={dockGroupRef} data-placing={ui.placing ? 'true' : undefined}>
+  return <div className="stage-bottom" ref={dockGroupRef} data-placing={ui.placing ? 'true' : undefined} data-contextual={contextual ? 'true' : undefined}>
     <p id="status" ref={statusRef} className="glass-surface" role="status" data-idle={idle} hidden={!statusText}><span>{statusText}</span>{ui.placing && <Button variant="secondary" id="stage-stop-placing" className="stage-stop-placing" onClick={a.stopPlacing}>Stop placing</Button>}</p>
     <motion.div className="stage-toolbar" initial={false} inert={hideCamera || undefined} aria-hidden={hideCamera || undefined}
       animate={{height: compact ? hideCamera ? 0 : 56 : 'auto', opacity: hideCamera ? 0 : 1}}
       transition={reduce || !compact ? {duration: 0} : UI_SPRING}
       style={{pointerEvents: hideCamera ? 'none' : undefined, overflow: compact ? 'hidden' : undefined}}>
       <nav className="camera-bar glass-surface" ref={dockRef} aria-label="Camera views">
-      {camera('body', 'Orbit', Orbit)}{camera('detail', 'Detail', Focus)}{camera('front', 'Front', UserRound)}{camera('side', 'Side', MoveHorizontal)}{camera('back', 'Back', RotateCcw)}
+      {camera('body', 'Orbit', Orbit)}{camera('detail', 'Detail', Focus)}{instrument ? <Select id="camera-angle" aria-label="Camera angle" value={['front','side','back'].includes(ui.currentView) ? ui.currentView : 'angle'} disabled={ui.blocked || !ui.ready} onValueChange={a.chooseCamera} items={[{value:'angle',label:'Angles',disabled:true},{value:'front',label:'Front'},{value:'side',label:'Side'},{value:'back',label:'Back'}]} /> : <>{camera('front', 'Front', UserRound)}{camera('side', 'Side', MoveHorizontal)}{camera('back', 'Back', RotateCcw)}</>}
     </nav></motion.div>
     <p className="interaction-hint">Drag to orbit · scroll or pinch to zoom</p>
   </div>;
@@ -155,7 +161,8 @@ export function Inspector({app, snapshot, panelRef, instrument = false}) {
   const scrollRef = useRef(null), scrollPositions = useRef(new Map());
   const scrollKey = `${study?.id}:${ui.surface}`;
   useLayoutEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollPositions.current.get(scrollKey) || 0; }, [scrollKey]);
-  useEffect(() => { if (ui.focusPlacement) document.querySelector('#region')?.focus(); }, [ui.focusPlacement]);
+  useLayoutEffect(() => { if (instrument && ui.surface === 'composition' && scrollRef.current) scrollRef.current.scrollTop = 0; }, [instrument, ui.adjustmentTool]);
+  useEffect(() => { if (ui.focusPlacement) document.querySelector('#region')?.focus(); }, [ui.focusPlacement, instrument]);
   const labels = {normal: 'Expand', expanded: 'Canvas', collapsed: 'Controls'};
   return <motion.aside ref={panelRef} id="study-controls" tabIndex={-1} className={`controls-panel glass-surface ${ui.panelState === 'normal' ? '' : ui.panelState}`}
     style={{height: sheet.height}} data-sheet-dragging={sheet.dragging ? 'true' : undefined}
@@ -164,15 +171,18 @@ export function Inspector({app, snapshot, panelRef, instrument = false}) {
     <motion.div className="sheet-drag-handle" aria-hidden="true" {...sheet.pan}><span /></motion.div>
     <div className="controls-top">
       <nav className="surface-tabs" aria-label="Workspace">
-        <Button variant="ghost" data-surface="composition" data-left="layers" data-panel="tattoo" aria-pressed={ui.surface === 'composition'} onClick={() => a.showSurface('composition')}>Composition <span id="layer-count">{study?.tattoos.length || 0}</span></Button>
-        <Button variant="ghost" data-surface="artwork" data-left="library" aria-pressed={ui.surface === 'artwork'} onClick={() => a.showSurface('artwork')}>Artwork <span id="asset-count">{workspace?.assets.length || 0}</span></Button>
+        <Button variant="ghost" data-surface="composition" data-left="layers" data-panel="tattoo" aria-pressed={ui.surface === 'composition'} onClick={() => a.showSurface('composition')}>{instrument ? 'Adjust' : 'Composition'} <span id="layer-count">{study?.tattoos.length || 0}</span></Button>
+        {instrument && <Button variant="ghost" data-surface="collection" aria-pressed={ui.surface === 'collection'} onClick={() => a.showSurface('collection')}>Tattoos <span>{study?.tattoos.length || 0}</span></Button>}
+        {!instrument && <Button variant="ghost" data-surface="artwork" data-left="library" aria-pressed={ui.surface === 'artwork'} onClick={() => a.showSurface('artwork')}>Artwork <span id="asset-count">{workspace?.assets.length || 0}</span></Button>}
         <Button variant="ghost" data-surface="body" data-panel="body" aria-pressed={ui.surface === 'body'} onClick={() => a.showSurface('body')}>Body</Button>
+        {instrument && <Button variant="ghost" data-surface="artwork" aria-label="Add artwork" title="Add artwork" aria-pressed={ui.surface === 'artwork'} onClick={() => a.showSurface('artwork')}><Plus size={18} aria-hidden="true" /><span className="add-art-label">Add</span></Button>}
       </nav>
       <Button variant="ghost" id="controls-toggle" disabled={ui.blocked || ui.placing} aria-label={`${labels[ui.panelState]} panel`} aria-expanded={ui.panelState !== 'collapsed'} onClick={a.togglePanel}>{labels[ui.panelState]}</Button>
     </div>
     <div className="controls-scroll" ref={scrollRef} onScroll={event => scrollPositions.current.set(scrollKey, event.currentTarget.scrollTop)}>
       {study && <>
         <motion.div className="react-surface" initial={false} animate={{opacity: ui.surface === 'composition' ? 1 : 0}} transition={reduce ? {duration: 0} : {duration: .16}} hidden={ui.surface !== 'composition'}><CompositionPanel app={app} snapshot={snapshot} instrument={instrument} /></motion.div>
+        {instrument && <div className="react-surface" hidden={ui.surface !== 'collection'}><TattooCollection app={app} snapshot={snapshot} /></div>}
         <motion.div className="react-surface" initial={false} animate={{opacity: ui.surface === 'artwork' ? 1 : 0}} transition={reduce ? {duration: 0} : {duration: .16}} hidden={ui.surface !== 'artwork'}><ArtworkPanel app={app} snapshot={snapshot} /></motion.div>
         <motion.div className="react-surface" initial={false} animate={{opacity: ui.surface === 'body' ? 1 : 0}} transition={reduce ? {duration: 0} : {duration: .16}} hidden={ui.surface !== 'body'}><BodyPanel app={app} snapshot={snapshot} /></motion.div>
       </>}
@@ -312,14 +322,14 @@ function StudioApp({app}) {
     <main className="workspace">
       <section className="stage" aria-label="Interactive tattoo composition">
         <div id="viewport" ref={viewportRef} aria-busy={ui.rendering} />
-        <div className="stage-top"><h1 id="stage-title">{study?.name || 'Study'}</h1><p id="stage-meta">{study ? `${study.body.stature.toFixed(1)} cm · ${visibleTattoos} visible tattoo${visibleTattoos === 1 ? '' : 's'}` : 'Approximate body reference'}</p></div>
+        <div className={instrument ? "stage-top sr-only" : "stage-top"}><h1 id="stage-title">{study?.name || 'Study'}</h1><p id="stage-meta">{study ? `${study.body.stature.toFixed(1)} cm · ${visibleTattoos} visible tattoo${visibleTattoos === 1 ? '' : 's'}` : 'Approximate body reference'}</p></div>
         <CameraDock app={app} snapshot={snapshot} dockRef={dockRef} dockGroupRef={dockGroupRef} statusRef={statusRef} />
         <PreviewRecovery app={app} snapshot={snapshot} />
       </section>
       <Inspector app={app} snapshot={snapshot} panelRef={panelRef} instrument={instrument} />
     </main>
     <footer><span id="footer-stats">{ui.storageMode === 'browser' ? 'Public beta · saved in this browser' : ui.stats.renderer ? `${ui.stats.renderer.toUpperCase()} · ${ui.stats.kernel.toUpperCase()} GEOMETRY · LOCAL SQLITE` : 'Saved to workspace'}</span></footer>
-    <WorkspaceDialogs app={app} ui={ui} study={study} /><ArtworkPreview app={app} />
+    <WorkspaceDialogs app={app} ui={ui} study={study} /><JourneyDialogs app={app} snapshot={snapshot} /><ArtworkPreview app={app} />
   </>;
 }
 

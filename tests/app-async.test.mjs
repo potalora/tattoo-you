@@ -31,13 +31,14 @@ test('preview export freezes input and retains copied metadata through delayed i
 });
 function exportHarness(h,{decode=async()=>{},snapshot=async()=> 'data:image/png;base64,completed'}={}) {
  const button={disabled:false},body={inert:false},labels=[],downloads=[],images=[];
- const document={createElement:()=>({getContext:()=>({measureText:text=>({width:text.length*7}),fillRect(){},drawImage(image){images.push(image.src);},fillText(value){labels.push(value);}}),toBlob(callback){callback({});}})};
+ const document={createElement:()=>({getContext:()=>({measureText:text=>({width:text.length*7}),fillRect(){},drawImage(image){images.push(image.src);},fillText(value){labels.push(value);}}),toBlob(callback,type){callback(new Blob(['image'],{type}));}})};
  const Image=class{width=100;height=100;decode(){return decode();}};
+ const FileReader=class{async readAsDataURL(blob){this.result='data:'+blob.type+';base64,'+Buffer.from(await blob.arrayBuffer()).toString('base64');this.onload();}};
  h.context.studio.snapshot=snapshot;
  const files=createWorkspaceFiles(h.context,{
   api:h.api,active:()=>h.context.workspace.projects.find(p=>p.id===h.context.workspace.activeProjectId),
   say:message=>h.messages.push(message),setInteractionBlocked(value){body.inert=value;button.disabled=value;},
-  download:name=>downloads.push(name),browser:{document,Image},
+  download:name=>downloads.push(name),browser:{document,Image,FileReader},
  });
  return {button,body,labels,downloads,images,export:files.saveImage};
 }

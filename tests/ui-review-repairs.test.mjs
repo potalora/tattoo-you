@@ -6,7 +6,7 @@ import {loadJsx} from './helpers/load-jsx.mjs';
 import * as layout from '../studio/viewport-layout.js';
 import {BODY_DEFAULTS} from '../studio/model.js';
 const primitives = await loadJsx(new URL('../studio/ui/primitives.jsx', import.meta.url));
-const {CompositionPanel} = await loadJsx(new URL('../studio/ui/composition-panel.jsx', import.meta.url));
+const {CompositionPanel, TattooCollection} = await loadJsx(new URL('../studio/ui/composition-panel.jsx', import.meta.url));
 const {ArtworkPanel} = await loadJsx(new URL('../studio/ui/artwork-panel.jsx', import.meta.url));
 const {BodyPanel} = await loadJsx(new URL('../studio/ui/body-panel.jsx', import.meta.url));
 const {StudyCard, CameraDock} = await loadJsx(new URL('../studio/ui/main.jsx', import.meta.url));
@@ -42,10 +42,18 @@ test('placement is labelled and group reference width explains the actual comman
  assert.match(html,/Save alternative/);assert.match(html,/Your original study is kept/);
 });
 test('layer ordering is explicit touch and keyboard disclosure, preserving complete names',()=>{
- const html=render(CompositionPanel,{...fixture(),instrument:true});
+ const html=render(TattooCollection,fixture());
  assert.equal((html.match(/class="layer-order"/g)||[]).length,4);
  assert.equal((html.match(/<summary[^>]*aria-label="Order Long wrap/g)||[]).length,4);
  for(const ending of ['upper outer','forearm outer','forearm inner','upper rear'])assert.ok(html.includes(`canonical name ${ending}`));
+});
+test('a single tattoo omits ordering controls that cannot change its position',()=>{
+ const props=fixture();
+ props.snapshot.study.tattoos=props.snapshot.study.tattoos.slice(0,1);
+ const html=render(TattooCollection,props);
+ assert.doesNotMatch(html,/class="layer-order"/);
+ assert.match(html,/aria-label="Hide Long wrap design canonical name upper outer"/);
+ assert.match(html,/aria-label="Lock Long wrap design canonical name upper outer"/);
 });
 test('repeat import precedes library results while preparation and existing-tattoo options remain available',()=>{
  const props=fixture();
@@ -92,4 +100,15 @@ test('placing has a persistent labelled stop action in the stage independent of 
  assert.match(html,/Tap visible skin to place this tattoo\./);
  assert.match(html,/id="stage-stop-placing"[^>]*>Stop placing<\/button>/);
  assert.doesNotMatch(html,/id="tattoo-controls"/);
+});
+test('group adjustment controls share one scope explanation while locked selection stays explicit',()=>{
+ const props=fixture();props.snapshot.study.selectedIds=['l0','l1','l2'];props.snapshot.study.tattoos[1].locked=true;props.snapshot.selection.canReanchor=false;
+ const html=render(CompositionPanel,{...props,instrument:true});
+ assert.match(html,/3 selected · 2 editable · 1 locked/);
+ assert.equal((html.match(/Locked tattoos stay in place\./g)||[]).length,1);
+ assert.equal((html.match(/Reference design:/g)||[]).length,1);
+ assert.match(html,/id="selection-adjustment-scope"/);
+ for(const label of ['Reference width (approx.)','Rotation'])assert.ok(html.includes(`role="group" aria-label="${label} adjustment" aria-describedby="selection-summary selection-adjustment-scope"`));
+ assert.match(html,/Choose one tattoo to change its body area/);
+ assert.match(/<button[^>]*id="place-on-body"[^>]*>/.exec(html)[0],/disabled/);
 });

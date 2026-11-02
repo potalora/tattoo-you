@@ -158,10 +158,17 @@ test('backup refuses a snapshot missing artwork referenced by open studies', asy
   assert.deepEqual(f.events.at(-1), ['blocked', false]);
 });
 
-function captureFixture({decode = async () => {}, snapshot, nullBlob = false} = {}) {
+function captureFixture({decode = async () => {}, snapshot, nullBlob = false, readError = false, wasBlocked = false} = {}) {
   const labels = [], draws = [], canvases = [];
   const browser = {
     Image: class {width = 1000; height = 800; async decode() { await decode(); }},
+    FileReader: class {
+      async readAsDataURL(blob) {
+        if (readError) { this.error = Error('Preview read failed'); this.onerror(); return; }
+        this.result = 'data:' + blob.type + ';base64,' + Buffer.from(await blob.arrayBuffer()).toString('base64');
+        this.onload();
+      }
+    },
     document: {createElement(tag) {
       assert.equal(tag, 'canvas');
       const canvas = {
@@ -169,16 +176,67 @@ function captureFixture({decode = async () => {}, snapshot, nullBlob = false} = 
           measureText: text => ({width: text.length * 6}), fillRect() {},
           drawImage(...args) { draws.push(args); }, fillText: text => labels.push(text),
         }; },
-        toBlob(callback) { callback(nullBlob ? null : new Blob(['image'])); },
+        toBlob(callback, type) { assert.equal(type, 'image/png'); callback(nullBlob ? null : new Blob(['image'], {type})); },
       };
       canvases.push(canvas);
       return canvas;
     }},
   };
-  const f = fixture({}, browser);
+  const f = fixture({getInteractionBlocked: () => wasBlocked}, browser);
   f.state.studio.snapshot = snapshot || (async () => 'data:image/png;base64,traced');
   return {...f, labels, draws, canvases};
 }
+
+test('reference preparation returns a preview of the exact PNG with captured metadata, without downloading', async () => {
+  const gate = deferred(), f = captureFixture({decode: () => gate.promise});
+  f.state.studio.getViewName = () => 'left';
+  f.state.mappingWarnings = ['Seam crossing'];
+  f.study.notes = 'Original artist notes';
+  const preparing = f.files.prepareReference();
+  await new Promise(resolve => setImmediate(resolve));
+  f.study.name = 'Later name';
+  f.study.notes = 'Later notes';
+  f.state.studio.getViewName = () => 'right';
+  f.state.mappingWarnings[0] = 'Later warning';
+  gate.resolve();
+  const prepared = await preparing;
+  assert.deepEqual(f.downloads, []);
+  assert.equal(prepared.filename, 'inkform-Personal-study-left.png');
+  assert.equal(prepared.studyName, 'Personal study');
+  assert.equal(prepared.view, 'left');
+  assert.equal(prepared.width, 1000);
+  assert.equal(prepared.height, 800 + 40 + f.labels.length * 22);
+  assert.equal(prepared.blob.type, 'image/png');
+  assert.equal(Buffer.from(prepared.dataUrl.split(',')[1], 'base64').toString(), await prepared.blob.text());
+  assert.equal(prepared.caption, f.labels.join('\n'));
+  assert.match(prepared.caption, /View: Left side/);
+  assert.match(prepared.caption, /Original artist notes/);
+  assert.match(prepared.caption, /Surface mapping limitation: Seam crossing/);
+  assert.doesNotMatch(prepared.caption, /Later/);
+  assert.deepEqual(f.events, [['blocked', true], ['blocked', false]]);
+});
+
+test('downloading a reviewed reference reuses its exact blob without capturing the edited study again', async () => {
+  const f = captureFixture();
+  const prepared = await f.files.prepareReference();
+  f.study.name = 'Changed after review';
+  f.state.studio.snapshot = () => { throw Error('Must not recapture'); };
+  f.files.downloadReference(prepared);
+  assert.equal(f.downloads.length, 1);
+  assert.equal(f.downloads[0].blob, prepared.blob);
+  assert.equal(f.downloads[0].name, 'inkform-Personal-study-custom-view.png');
+  assert.match(f.messages.at(-1), /Reference download started/);
+});
+
+test('reference preparation restores an already blocked workspace on success and every failure', async () => {
+  for (const options of [{}, {snapshot: async () => { throw Error('Snapshot failed'); }}, {readError: true}]) {
+    const f = captureFixture({...options, wasBlocked: true});
+    if (options.snapshot || options.readError) await assert.rejects(f.files.prepareReference(), /failed/);
+    else await f.files.prepareReference();
+    assert.deepEqual(f.events, [['blocked', true], ['blocked', true]]);
+    assert.deepEqual(f.downloads, []);
+  }
+});
 
 test('reference freezes capture region and study metadata before asynchronous decoding', async () => {
   const gate = deferred(), f = captureFixture({decode: () => gate.promise});
