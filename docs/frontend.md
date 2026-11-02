@@ -37,6 +37,8 @@ Comparison holds `state.reviewing` and blocks editing while the existing rendere
 
 On phones, the controls panel has collapsed, normal and expanded stops. Only the dedicated top handle drags the sheet; sliders and artwork retain their own input. The actual animated height updates the workspace measurement while the sheet moves. Desktop transitions clear mobile height overrides. Motion owns interface animation, while the scene owns finite camera interpolation and returns to idle after it settles. Export settles the camera before capture.
 
+Save recovery keeps the phone study name and save status in their normal positions, stacks Retry below the cause, and lets long causes scroll. While recovery is visible, the sheet stops use the measured header bottom so the camera row and expanded controls fit below it. Comparison opens with focus on its heading; paired actions stay aligned when names wrap. Artwork preview shrinks the image area before its header and action row, with native dialog scrolling available for exceptionally long content.
+
 The existing viewport observer also publishes `--dock-live-height` for the framed Instrument stage. Feedback wrapping changes the frame reservation and camera boundary together without changing saved camera state or adding an observer.
 
 Reduced-motion preferences are observed live. Reduced transparency and increased contrast use opaque surfaces without backdrop filters. Forced colors retain system control colors. Keyboard interaction and focus restoration remain owned by Base UI or native controls.

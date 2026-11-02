@@ -53,6 +53,7 @@ html[data-theme=instrument] .library-import .upload { background: var(--panel); 
 html[data-theme=instrument] .art-card .add-art { width: auto; min-width: 62px; }
 html[data-theme=instrument] .study-layers .layer-index { display: none; }
 @media (min-width: 701px) and (max-width: 1050px) { html[data-theme=instrument] { --pane-width: 310px; } html[data-theme=instrument] .masthead { gap: 12px; } html[data-theme=instrument] .instrument-brand { min-width: 130px; } }
+@media (min-width: 701px) and (max-width: 900px) { html[data-theme=instrument] .instrument-brand { display: none; } }
 /* Editor journey: the canvas leads; collection, adjustment and study actions
    have separate places. These rules replace the original three-scope inspector. */
 html[data-theme=instrument] .instrument-brand > span { letter-spacing: -.035em; }
@@ -135,7 +136,7 @@ html[data-theme=instrument] .comparison-images figure { margin: 0; min-width: 0;
 html[data-theme=instrument] .comparison-images img { width: 100%; height: min(48dvh,460px); object-fit: contain; background: var(--instrument-recess); border-radius: 4px; }
 html[data-theme=instrument] .comparison-images figcaption { display: grid; gap: 4px; overflow-wrap: anywhere; font-size: 14px; }
 html[data-theme=instrument] .comparison-images figcaption span { color: var(--muted); font-size: 12px; }
-html[data-theme=instrument] .comparison-images figure > button { align-self: start; }
+html[data-theme=instrument] .comparison-images figure > button { align-self: start; margin-top: auto; }
 html[data-theme=instrument] .comparison-switch { display: none; }
 html[data-theme=instrument] .comparison-empty { margin-top: 28px; max-width: 60ch; }
 html[data-theme=instrument] .comparison-empty :is(p,button) { margin-top: 16px; }
@@ -154,8 +155,11 @@ html[data-theme=instrument] .review-error { color: var(--danger); margin-top: 16
   html[data-theme=instrument] .instrument-brand, html[data-theme=instrument] .instrument-history { display: none; }
   html[data-theme=instrument] .study-card { flex: 1; width: auto; padding: 2px 4px 2px 8px; gap: 4px; min-width: 0; max-width: none; }
   html[data-theme=instrument] .study-picker { align-self: stretch; }
-  html[data-theme=instrument] .study-card:not(:has(.save-recovery:not([hidden]))) .study-save { position: absolute; left: 8px; right: 52px; bottom: 4px; height: 16px; max-width: none; min-width: 0; flex-wrap: nowrap; gap: 4px; pointer-events: none; }
-  html[data-theme=instrument] .study-card:not(:has(.save-recovery:not([hidden]))) .study-save .storage-scope { flex: 1; flex-basis: auto; min-width: 0; line-height: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  html[data-theme=instrument] .study-card .study-save { position: absolute; left: 8px; right: 52px; top: 30px; height: 16px; max-width: none; min-width: 0; flex-wrap: nowrap; gap: 4px; pointer-events: none; }
+  html[data-theme=instrument] .study-card .study-save .storage-scope { flex: 1; flex-basis: auto; min-width: 0; line-height: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  html[data-theme=instrument] .save-recovery { flex-direction: column; align-items: stretch; }
+  html[data-theme=instrument] .save-recovery-copy { flex: auto; max-height: 6lh; overflow-y: auto; }
+  html[data-theme=instrument] #retry-save { align-self: flex-start; }
   html[data-theme=instrument] .study-save > svg { width: 12px; }
   html[data-theme=instrument] .study-save .save-status-short { display: inline; flex: none; line-height: 16px; }
   html[data-theme=instrument] .study-save[data-save-state=error] .save-status-short { display: inline; }
@@ -166,6 +170,10 @@ html[data-theme=instrument] .review-error { color: var(--danger); margin-top: 16
   html[data-theme=instrument] .header-right .save-image { width: 44px; padding: 10px; }
   html[data-theme=instrument] .save-label-wide, html[data-theme=instrument] .save-label-compact { display: none; }
   html[data-theme=instrument] .workspace { --instrument-workspace-top: 66px; --instrument-header-gap: 8px; inset: max(66px,calc(var(--recovery-header-bottom,0px) + 8px)) 8px max(8px,env(safe-area-inset-bottom)); }
+  html[data-theme=instrument] .masthead:has(.save-recovery:not([hidden])) + .workspace {
+    --sheet-height: min(252px,max(60px,calc(100dvh - var(--recovery-header-bottom,58px) - 88px)));
+    --expanded-height: min(340px,max(var(--sheet-height),calc(100dvh - var(--recovery-header-bottom,58px) - 16px)));
+  }
   html[data-theme=instrument] .stage { inset: 0; }
   html[data-theme=instrument] #viewport,
   html[data-theme=instrument] .workspace:has(.controls-panel.expanded) #viewport { top: 0; left: 0; right: 0; bottom: calc(var(--sheet-live-height,var(--sheet-height)) + var(--dock-live-height,52px) + 8px); }

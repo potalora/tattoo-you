@@ -102,7 +102,7 @@ html[data-theme=instrument] :is(.composition-heading h2,.panel-intro h2,.section
   line-height: 1.4;
   letter-spacing: 0;
 }
-html[data-theme=instrument] .panel-intro { gap: 8px; margin-bottom: 8px; align-items: center; }
+html[data-theme=instrument] .panel-intro { gap: 8px; margin-bottom: 8px; align-items: flex-start; }
 html[data-theme=instrument] .selection-description { flex: 1; }
 html[data-theme=instrument] .panel-intro h2 { white-space: normal; overflow-wrap: anywhere; }
 html[data-theme=instrument] .selection-preview {
@@ -137,7 +137,7 @@ html[data-theme=instrument] #browse-art:not(:disabled):hover { color: var(--text
 html[data-theme=instrument] .range-control,
 html[data-theme=instrument] #tattoo-controls > .range-control {
   margin-block: 10px;
-  row-gap: 0;
+  row-gap: 8px;
   column-gap: 12px;
 }
 html[data-theme=instrument] .range-control label { color: var(--muted); font-size: 13px; }
@@ -303,6 +303,7 @@ html[data-theme=instrument] .menu-divider { height: 1px; background: var(--line)
 html[data-theme=instrument] .layer-menu-content .small-actions,
 html[data-theme=instrument] .layer-menu-content .layer-tools { display: grid; grid-template-columns: 1fr; gap: 2px; }
 html[data-theme=instrument] .layer-menu-content .hint { padding: 6px 8px; margin-block: 3px; }
+html[data-theme=instrument] .layer-menu-content :is(button,#remove-layers):disabled { color: #777c72; border-color: #c0c4ba; box-shadow: none; }
 html[data-theme=instrument] .ui-dialog-backdrop,
 html[data-theme=instrument] dialog::backdrop { background: #23272066; -webkit-backdrop-filter: none; backdrop-filter: none; }
 html[data-theme=instrument] .ui-dialog { padding: 26px; border-radius: 7px; }
@@ -317,17 +318,22 @@ html[data-theme=instrument] .workspace-links button { padding-inline: 10px; }
 html[data-theme=instrument] .loading { gap: 12px; padding: 25px; }
 html[data-theme=instrument] .loading p { overflow-wrap: anywhere; }
 html[data-theme=instrument] .loading button { width: 100%; }
-html[data-theme=instrument] .artwork-preview { padding: 0; }
+html[data-theme=instrument] .artwork-preview { padding: 0; max-height: calc(100dvh - 24px); }
+html[data-theme=instrument] .artwork-preview-content { display: flex; flex-direction: column; max-height: calc(100dvh - 26px); }
+html[data-theme=instrument] :is(.preview-heading,.preview-toolbar) { flex: none; }
 html[data-theme=instrument] .preview-heading { align-items: flex-start; padding: 18px; border-bottom: 1px solid var(--line); }
 html[data-theme=instrument] .preview-heading h2 { margin: 0; font-size: 19px; }
 html[data-theme=instrument] .preview-heading p { font: 11px/1.5 var(--mono); color: var(--muted); }
 html[data-theme=instrument] .preview-actions { gap: 5px; }
 html[data-theme=instrument] .preview-actions > button { min-height: 44px; border: 1px solid var(--line); background: #e5e8dd; color: var(--text); }
-html[data-theme=instrument] .preview-paper { margin: 18px; background: #fafaf5; border: 1px solid var(--line); border-radius: 3px; }
+html[data-theme=instrument] .preview-paper { flex: 1 1 auto; min-height: 80px; grid-template-rows: minmax(0,1fr); margin: 18px; background: #fafaf5; border: 1px solid var(--line); border-radius: 3px; }
+html[data-theme=instrument] .preview-paper :is(img,canvas) { min-height: 0; max-height: 100%; }
 html[data-theme=instrument] .preview-paper p { color: var(--text); }
 html[data-theme=instrument] .preview-toolbar { gap: 12px; padding: 0 18px 18px; }
+html[data-theme=instrument] .preview-toolbar nav { gap: 8px; }
 html[data-theme=instrument] .preview-toolbar button { border: 1px solid var(--line); border-radius: 4px; background: #e5e8dd; color: var(--text); min-height: 44px; }
 html[data-theme=instrument] .preview-toolbar .primary { background: var(--accent); border-color: #a84018; color: #11160e; }
+html[data-theme=instrument] .preview-toolbar button:disabled { color: #777c72; border-color: #c0c4ba; background: #e0e2d9; box-shadow: none; }
 
 @media (max-width: 700px) {
   html[data-theme=instrument] :is(input[type=text],input[type=search],input[type=number],input:not([type]),textarea,.select-trigger,.select-option) { font-size: 16px; }

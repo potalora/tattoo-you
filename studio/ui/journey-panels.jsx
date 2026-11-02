@@ -6,7 +6,7 @@ import {ReferenceReview} from './reference-inspector.jsx';
 export function JourneyDialogs({app, snapshot}) {
   const {ui, study, workspace} = snapshot, a = app.actions;
   const [side, setSide] = useState('a');
-  const captureButton = useRef(null), wasBusy = useRef(false);
+  const captureButton = useRef(null), comparisonTitle = useRef(null), wasBusy = useRef(false);
   useEffect(() => { setSide('a'); }, [ui.comparison]);
   useEffect(() => {
     if (wasBusy.current && !ui.reviewBusy && ui.dialog === 'compare') captureButton.current?.focus();
@@ -17,8 +17,8 @@ export function JourneyDialogs({app, snapshot}) {
   const comparison = ui.comparison;
   return <>
     <Dialog open={ui.dialog === 'compare'} onOpenChange={open => { if (!open) a.closeDialog(); }}>
-      <DialogContent id="comparison-dialog" className="journey-dialog comparison-dialog" showCloseButton={!ui.reviewBusy} finalFocus={() => document.getElementById('compare-studies')}>
-        <DialogTitle>Compare placements</DialogTitle>
+      <DialogContent id="comparison-dialog" className="journey-dialog comparison-dialog" showCloseButton={!ui.reviewBusy} initialFocus={comparisonTitle} finalFocus={() => document.getElementById('compare-studies')}>
+        <DialogTitle ref={comparisonTitle} tabIndex={-1}>Compare placements</DialogTitle>
         <DialogDescription>Two studies, one camera position. Your saved studies stay independent.</DialogDescription>
         <div className="comparison-choices">
           <div><span className="comparison-letter">A</span><strong title={study.name}>{study.name}</strong><small>Current study</small></div>
