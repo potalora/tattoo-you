@@ -26,7 +26,7 @@ html[data-theme=instrument] .study-save > svg { display: block; }
 html[data-theme=instrument] .header-right { display: flex; align-items: center; }
 html[data-theme=instrument] .instrument-history { display: flex; gap: 4px; }
 html[data-theme=instrument] .instrument-history .ui-button { width: 44px; height: 44px; padding: 10px; border: 1px solid var(--line); background: var(--panel); border-radius: 3px; }
-html[data-theme=instrument] .header-right .save-image { min-height: 46px; background: var(--text); border: 1px solid var(--text); color: var(--panel); border-radius: 3px; }
+html[data-theme=instrument] .header-right .save-image { min-height: 44px; background: var(--text); border: 1px solid var(--text); color: var(--panel); border-radius: 3px; }
 html[data-theme=instrument] .header-right .save-image:not(:disabled):hover { background: #41483a; color: var(--panel); }
 html[data-theme=instrument] .workspace { --instrument-workspace-top: 88px; --instrument-header-gap: 14px; position: absolute; inset: max(var(--instrument-workspace-top),calc(var(--recovery-header-bottom,0px) + var(--instrument-header-gap))) 18px 18px; height: auto; }
 html[data-theme=instrument] .stage { inset: 0 calc(var(--pane-width) + 14px) 0 0; background: var(--instrument-recess); border-radius: 5px; }
@@ -59,7 +59,7 @@ html[data-theme=instrument] .instrument-brand > span { letter-spacing: -.035em; 
 html[data-theme=instrument] .instrument-brand > small { display: none; }
 html[data-theme=instrument] .study-card { border: 1px solid var(--edge); background: var(--panel); border-radius: 4px; }
 html[data-theme=instrument] .header-right { gap: 8px; }
-html[data-theme=instrument] #compare-studies { display: inline-flex; align-items: center; gap: 8px; }
+html[data-theme=instrument] #compare-studies { display: inline-flex; align-items: center; gap: 8px; width: auto; margin: 0; }
 html[data-theme=instrument] .header-right .save-image { min-width: 120px; }
 html[data-theme=instrument] .stage { border: 1px solid var(--edge); }
 html[data-theme=instrument] .stage-top.sr-only { width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
@@ -108,9 +108,14 @@ html[data-theme=instrument] [data-surface-content=collection] .layer { border: 1
 html[data-theme=instrument] [data-surface-content=collection] .layer.selected { background: #f3e3d8; border-color: #bf8f71; }
 html[data-theme=instrument] [data-surface-content=collection] .layer-selection { grid-column: 1; grid-row: 1; }
 html[data-theme=instrument] [data-surface-content=collection] .layer-description { grid-column: 2; }
-html[data-theme=instrument] [data-surface-content=collection] .layer-title { min-height: 44px; padding: 4px 0; text-align: left; width: 100%; white-space: normal; overflow-wrap: anywhere; }
+html[data-theme=instrument] [data-surface-content=collection] .layer-title { min-height: 44px; padding: 4px 0; justify-content: flex-start; text-align: left; width: 100%; white-space: normal; overflow-wrap: anywhere; }
 html[data-theme=instrument] [data-surface-content=collection] .layer small { font-size: 12px; }
-html[data-theme=instrument] [data-surface-content=collection] .layer-actions { grid-column: 1 / -1; }
+/* The collection owns a full-width action row; the inline Glass list uses contents. */
+html[data-theme=instrument] [data-surface-content=collection] .study-layers .layer .layer-actions { grid-column: 1 / -1; display: flex; align-items: flex-start; justify-content: flex-start; gap: 8px; }
+html[data-theme=instrument] [data-surface-content=collection] .layer-order { margin-left: auto; }
+html[data-theme=instrument] [data-surface-content=collection] .layer-order > summary { gap: 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
+html[data-theme=instrument] [data-surface-content=collection] .layer-order[open] > summary svg { rotate: 180deg; }
+html[data-theme=instrument] [data-surface-content=collection] .layer-order-actions { margin-top: 4px; }
 html[data-theme=instrument] .collection-adjust { position: sticky; bottom: 0; width: 100%; margin-top: 16px; }
 html[data-theme=instrument] .range-exact input { font-variant-numeric: tabular-nums; }
 html[data-theme=instrument] ::selection { background: #c4d7dd; color: var(--text); }

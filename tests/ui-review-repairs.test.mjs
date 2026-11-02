@@ -47,6 +47,14 @@ test('layer ordering is explicit touch and keyboard disclosure, preserving compl
  assert.equal((html.match(/<summary[^>]*aria-label="Order Long wrap/g)||[]).length,4);
  for(const ending of ['upper outer','forearm outer','forearm inner','upper rear'])assert.ok(html.includes(`canonical name ${ending}`));
 });
+test('a single tattoo omits ordering controls that cannot change its position',()=>{
+ const props=fixture();
+ props.snapshot.study.tattoos=props.snapshot.study.tattoos.slice(0,1);
+ const html=render(TattooCollection,props);
+ assert.doesNotMatch(html,/class="layer-order"/);
+ assert.match(html,/aria-label="Hide Long wrap design canonical name upper outer"/);
+ assert.match(html,/aria-label="Lock Long wrap design canonical name upper outer"/);
+});
 test('repeat import precedes library results while preparation and existing-tattoo options remain available',()=>{
  const props=fixture();
  for(const populated of [true,false]){

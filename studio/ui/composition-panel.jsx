@@ -1,7 +1,7 @@
 import React, {memo, useEffect, useState} from 'react';
 import {editable, selection} from '../model.js';
 import {REGIONS} from '../regions.js';
-import {Eye, EyeOff, LockKeyhole, LockKeyholeOpen, ArrowUp, ArrowDown, Crosshair, Focus, Orbit} from 'lucide-react';
+import {Eye, EyeOff, LockKeyhole, LockKeyholeOpen, ArrowUp, ArrowDown, ChevronDown, Crosshair, Focus, Orbit} from 'lucide-react';
 import {Button, Field, Select, RangeControl, PreparedCompositionGuidance, closeMenuThen} from './primitives.jsx';
 
 function CompositionPanelView({app, snapshot, instrument = false}) {
@@ -179,12 +179,12 @@ export function TattooCollection({app, snapshot, inline = false}) {
                 disabled={ui.blocked} onClick={() => actions.layerAction(layer.id, 'visible')}>{layer.visible ? <Eye size={16} aria-hidden="true" /> : <EyeOff size={16} aria-hidden="true" />}</Button>
               <Button variant="ghost" data-action="locked" data-id={layer.id} title={`${layer.locked ? 'Unlock' : 'Lock'} ${layer.name}`} aria-label={`${layer.locked ? 'Unlock' : 'Lock'} ${layer.name}`} disabled={ui.blocked}
                 onClick={() => actions.layerAction(layer.id, 'locked')}>{layer.locked ? <LockKeyhole size={16} aria-hidden="true" /> : <LockKeyholeOpen size={16} aria-hidden="true" />}</Button>
-              <details className="layer-order"><summary aria-label={`Order ${layer.name}`}>Order</summary><div className="layer-order-actions">
+              {study.tattoos.length > 1 && <details className="layer-order"><summary aria-label={`Order ${layer.name}`}>Order<ChevronDown size={14} aria-hidden="true" /></summary><div className="layer-order-actions">
               <Button variant="ghost" data-action="up" data-id={layer.id} aria-label={`Move ${layer.name} up`}
                 disabled={ui.blocked || index === 0} onClick={() => actions.layerAction(layer.id, 'up')}><ArrowUp size={16} aria-hidden="true" /></Button>
               <Button variant="ghost" data-action="down" data-id={layer.id} aria-label={`Move ${layer.name} down`}
                 disabled={ui.blocked || index === study.tattoos.length - 1} onClick={() => actions.layerAction(layer.id, 'down')}><ArrowDown size={16} aria-hidden="true" /></Button>
-              </div></details>
+              </div></details>}
             </div>
           </div>;
         }) : <div className="empty">No tattoos added.<br /><br />Add artwork, choose a body area, then adjust its approximate size.</div>}
