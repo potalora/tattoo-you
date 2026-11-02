@@ -24,11 +24,11 @@ test('short portrait has distinct sheet stops and preserves usable display space
  for(const [width,height] of [[390,460],[390,480],[320,568]]){
   const vars=rootVariables(width,height),normal=length(vars['--sheet-height'],height),expanded=Math.max(normal,length(vars['--expanded-height'],height)),collapsed=length(vars['--collapsed-height'],height);
   assert.ok(normal>collapsed);assert.ok(expanded>=normal+24,`${width}x${height}: Expand must enlarge controls`);
-  const stageHeight=height-62-8;
-  assert.ok(stageHeight-5-normal-88>=120,`${width}x${height}: normal retains useful canvas`);
-  assert.ok(stageHeight-5-expanded-48>=120,`${width}x${height}: expanded retains useful canvas`);
+  const stageHeight=height-66-8;
+  assert.ok(stageHeight-normal-60>=120,`${width}x${height}: normal retains useful canvas`);
+  assert.ok(stageHeight-expanded-48>=120,`${width}x${height}: expanded retains useful canvas`);
  }
  const shortest=rootVariables(390,426);
  assert.ok(length(shortest['--expanded-height'],426)>=length(shortest['--sheet-height'],426)+24,'shorter portrait retains distinct sheet stops');
- for(const [width,height] of [[320,740],[390,844]]){const vars=rootVariables(width,height),expanded=length(vars['--expanded-height'],height);assert.ok(height-124-8-38-expanded-48>=220,'tall portrait adjustment keeps 220px display');}
+ for(const [width,height] of [[320,740],[390,844]]){const vars=rootVariables(width,height),expanded=length(vars['--expanded-height'],height);assert.ok(height-66-8-expanded-48>=220,'tall portrait adjustment keeps 220px display');}
 });

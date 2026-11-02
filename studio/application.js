@@ -6,6 +6,7 @@ import {bodyParams} from './body-controls.js';
 import {project, copy, editable, selection, addTattoo, transform, duplicateSelection, deleteSelection} from './model.js';
 import {STORAGE_LIMITS} from './storage-limits.js';
 import {applyBodyProfile, SHAPE_DEFAULTS} from './body-profiles.js';
+import {captureStudyComparison, compatibleComparisonStudies} from './study-comparison.js';
 
 function freeze(value) {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -29,26 +30,29 @@ export function createApplication({
   observeLayout = observeViewportLayout, fileServices = {}, clock,
   storageMode = 'browser', runtimeCapabilities = {}, initialQuality = 'auto',
   presentation = resolvePresentation(browser.location?.search || ''),
+  captureComparison = captureStudyComparison,
 } = {}) {
   const state = {
     workspace: null, studio: null, dirty: false, saving: false, conflict: false,
     saveTask: null, renderTask: null, lastRenderOK: true, rendering: false,
-    mappingWarnings: [], renderAgain: false, convertingBody: false, ready: false, currentView: 'body',
+    mappingWarnings: [], renderAgain: false, convertingBody: false, reviewing: false, ready: false, currentView: 'body',
   };
   const ui = {
     theme: resolveTheme(browser.location?.search || ''), presentation, storageMode, storagePersistence: 'unknown',
     loading: true, error: '', previewError: '', mappingWarnings: [], blocked: false, status: 'Opening your workspace…',
     saveLabel: 'Connecting…', saveError: false, saveFailure: '', retry: {hidden: true, text: 'Retry save'},
     surface: new URLSearchParams(browser.location?.search || '').get('panel') === 'body' ? 'body' : 'composition',
-    panelState: 'normal', placing: false, artSearch: '', importExisting: false,
+    panelState: 'normal', placing: false, adjustmentTool: 'place', artSearch: '', importExisting: false,
     lighting: 'studio', quality: ['auto', 'efficient', 'high'].includes(initialQuality) ? initialQuality : 'auto', stats: {}, preview: {phase: 'idle'},
     measurements: {}, dataStatus: '', dialog: null, nameRequest: null, focusPlacement: 0,
+    comparison: null, comparisonTarget: '', reviewBusy: false, reviewError: '', reference: null,
   };
   const listeners = new Set(), gestures = new Set();
   let snapshot, controller, files, initialization, viewportGeneration = 0;
   let previewAdapter = null, nameResolve = null, releaseViewport = null;
   let placementPanelState = null, placementTarget = null, statusVersion = 0, failedSaveVersion = null;
   let placementMedia = null, placementMediaListener = null;
+  let preparedReference = null;
 
   const compositionKey = study => study ? JSON.stringify([study.id,study.body,study.tattoos.filter(t => t.visible)]) : '';
   let warningKey = '', renderedWarningKey = '';
@@ -183,12 +187,19 @@ export function createApplication({
     setCameraSelection() { publish(); },
   });
   function showSurface(surface) {
-    if (!['composition', 'artwork', 'body'].includes(surface)) return;
+    if (!['composition', 'collection', 'artwork', 'body'].includes(surface)) return;
     ui.surface = surface;
     if (ui.panelState === 'collapsed' && !ui.placing) ui.panelState = 'normal';
     publishUI();
   }
-  function focusPlacement() { ui.focusPlacement++; publishUI(); }
+  function focusPlacement() {
+    ui.focusPlacement++; ui.adjustmentTool = 'place'; publishUI();
+    // Wait for the import's scene update before choosing a useful close-up.
+    const studyId = controller.active().id;
+    Promise.resolve(state.renderTask || sync.renderScene()).then(ok => {
+      if (ok && state.ready && !ui.blocked && !state.reviewing && controller.active().id === studyId) chooseCamera('detail');
+    }).catch(error => say(error.message));
+  }
   files = createWorkspaceFiles(state, {
     api, ...sync, active: controller.active, mutate: controller.mutate,
     invalidateArtworkHistory: controller.invalidateArtworkHistory, say,
@@ -221,6 +232,13 @@ export function createApplication({
 
   const actions = {
     showSurface,
+    setAdjustmentTool(tool) {
+      if (!['place', 'size', 'rotate', 'view', 'more'].includes(tool)) return false;
+      if (ui.placing && tool !== 'place') placeMode(false);
+      ui.adjustmentTool = tool;
+      sayUI(tool === 'place' ? (editable(controller.active()).length === 1 ? 'Choose a body area or Place on body.' : 'Choose one tattoo to change its body area.') : 'Drag to orbit · adjust the selected tattoos.');
+      return true;
+    },
     setPanelState(value) {
       if (!['collapsed', 'normal', 'expanded'].includes(value)) return false;
       if (ui.placing) return value === ui.panelState;
@@ -271,6 +289,12 @@ export function createApplication({
     },
     selectAll() { mutate(p => { p.selectedIds = p.tattoos.map(t => t.id); }, {history: false}); },
     clearSelection() { mutate(p => { p.selectedIds = []; }, {history: false}); },
+    focusLayer(id) {
+      if (!mutate(p => { if (p.tattoos.some(t => t.id === id)) p.selectedIds = [id]; }, {history: false})) return false;
+      showSurface('composition');
+      say('Adjust this tattoo, or choose another from Tattoos.');
+      return true;
+    },
     duplicateLayers() { mutate(duplicateSelection); },
     removeLayers() { mutate(deleteSelection); },
     togglePlace: guarded(() => placeMode(!ui.placing)),
@@ -348,6 +372,55 @@ export function createApplication({
     raytrace: guarded(() => { ui.lighting = 'studio'; state.studio.setLighting('studio'); publishUI(); return state.studio.raytrace(); }),
     cancelRaytrace: guarded(() => state.studio.cancelRaytrace()),
     saveImage: guarded(() => report(() => files.saveImage())),
+    openComparison: guarded(() => {
+      placeMode(false);
+      const candidates = compatibleComparisonStudies(state.workspace.projects, controller.active());
+      ui.comparisonTarget = candidates.some(p => p.id === ui.comparisonTarget) ? ui.comparisonTarget : candidates[0]?.id || '';
+      ui.comparison = null; ui.reviewError = ''; ui.dialog = 'compare'; publishUI();
+    }),
+    setComparisonTarget(id) {
+      if (ui.reviewBusy) return false;
+      if (!compatibleComparisonStudies(state.workspace.projects, controller.active()).some(p => p.id === id)) return false;
+      ui.comparisonTarget = id; ui.comparison = null; ui.reviewError = ''; publishUI(); return true;
+    },
+    async compareStudies() {
+      if (!canEdit() || ui.reviewBusy || !ui.comparisonTarget) return false;
+      ui.reviewBusy = true; ui.reviewError = ''; ui.comparison = null;
+      state.reviewing = true; ui.blocked = true; publishUI();
+      try {
+        ui.comparison = await captureComparison(state, {active: controller.active, targetId: ui.comparisonTarget, browser});
+        return true;
+      } catch (error) {
+        ui.reviewError = error.message;
+        if (!state.lastRenderOK) ui.previewError = 'Preview could not be restored. Change the view or reload the preview.';
+        return false;
+      } finally {
+        state.reviewing = false; ui.blocked = false; ui.reviewBusy = false; publish();
+      }
+    },
+    async editComparedStudy(id) {
+      if (!canEdit() || ui.reviewBusy) return false;
+      actions.closeDialog();
+      if (id !== controller.active().id) return actions.switchProject(id);
+      return true;
+    },
+    async reviewReference() {
+      if (!canEdit() || ui.reviewBusy) return false;
+      placeMode(false); preparedReference = null; ui.reference = null;
+      ui.reviewBusy = true; ui.reviewError = ''; publishUI();
+      try {
+        preparedReference = await files.prepareReference();
+        const {blob, ...preview} = preparedReference;
+        ui.reference = preview; ui.dialog = 'reference';
+        return true;
+      } catch (error) {
+        ui.reviewError = error.message; ui.dialog = 'reference'; return false;
+      } finally { ui.reviewBusy = false; publishUI(); }
+    },
+    downloadReference() {
+      if (!preparedReference || ui.reviewBusy) return false;
+      files.downloadReference(preparedReference); return true;
+    },
     exportBackup: () => canManageData() ? report(() => files.exportBackup(), backupFailure) : false,
     async restoreBackup(file) {
       if (!file || !canManageData()) return false;
@@ -387,7 +460,11 @@ export function createApplication({
     },
     openDialog(name) { ui.dialog = name; publishUI(); },
     setStoragePersistence(value) { ui.storagePersistence = value === true ? 'granted' : 'not-granted'; publishUI(); },
-    closeDialog() { ui.dialog = null; publishUI(); },
+    closeDialog() {
+      if (ui.reviewBusy) return false;
+      ui.dialog = null; ui.comparison = null; ui.reference = null; preparedReference = null; ui.reviewError = ''; publishUI();
+      return true;
+    },
     resolveName(value) {
       const resolve = nameResolve; nameResolve = null; ui.nameRequest = null; publishUI(); resolve?.(value);
     },
@@ -464,7 +541,7 @@ export function createApplication({
           presentation, getClearViewport: layout.measure, initialBody: controller.active().body,
           onMeasurements(value) { if (live()) { ui.measurements = value; publishUI(); } },
           onCamera(camera, metadata = {}) {
-            if (!live() || !state.ready) return;
+            if (!live() || !state.ready || state.reviewing) return;
             if (metadata.custom) state.currentView = 'custom';
             const old = controller.active().camera;
             if (!old || ['position', 'target'].some(k => camera[k].some((v, i) => Math.abs(v - old[k][i]) > 1e-5))) {
@@ -481,7 +558,7 @@ export function createApplication({
             mutate(p => { p.selectedIds = additive ? (p.selectedIds.includes(id) ? p.selectedIds.filter(x => x !== id) : [...p.selectedIds, id]) : [id]; }, {history: false});
           },
           onStats(value) {
-            if (!live()) return;
+            if (!live() || state.reviewing) return;
             const previous = [...new Set(ui.stats.warnings || [])].join(' ');
             ui.stats = value;
             const warningsAreCurrent = !state.rendering && state.lastRenderOK && renderedWarningKey === compositionKey(controller.active());

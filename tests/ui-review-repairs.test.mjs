@@ -6,7 +6,7 @@ import {loadJsx} from './helpers/load-jsx.mjs';
 import * as layout from '../studio/viewport-layout.js';
 import {BODY_DEFAULTS} from '../studio/model.js';
 const primitives = await loadJsx(new URL('../studio/ui/primitives.jsx', import.meta.url));
-const {CompositionPanel} = await loadJsx(new URL('../studio/ui/composition-panel.jsx', import.meta.url));
+const {CompositionPanel, TattooCollection} = await loadJsx(new URL('../studio/ui/composition-panel.jsx', import.meta.url));
 const {ArtworkPanel} = await loadJsx(new URL('../studio/ui/artwork-panel.jsx', import.meta.url));
 const {BodyPanel} = await loadJsx(new URL('../studio/ui/body-panel.jsx', import.meta.url));
 const {StudyCard, CameraDock} = await loadJsx(new URL('../studio/ui/main.jsx', import.meta.url));
@@ -42,7 +42,7 @@ test('placement is labelled and group reference width explains the actual comman
  assert.match(html,/Save alternative/);assert.match(html,/Your original study is kept/);
 });
 test('layer ordering is explicit touch and keyboard disclosure, preserving complete names',()=>{
- const html=render(CompositionPanel,{...fixture(),instrument:true});
+ const html=render(TattooCollection,fixture());
  assert.equal((html.match(/class="layer-order"/g)||[]).length,4);
  assert.equal((html.match(/<summary[^>]*aria-label="Order Long wrap/g)||[]).length,4);
  for(const ending of ['upper outer','forearm outer','forearm inner','upper rear'])assert.ok(html.includes(`canonical name ${ending}`));

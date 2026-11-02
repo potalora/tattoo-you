@@ -98,7 +98,7 @@ export function RangeControl({id, label, value, min, max, step, disabled, format
         if (event.key === 'Escape') { event.preventDefault(); cancel.current = true; setDraft(String(numberValue)); setError(''); event.currentTarget.blur(); }
       }} /><span aria-hidden="true">{units}</span></div>
     <input id={id} type="range" value={value} min={min} max={max} step={step} disabled={disabled} aria-valuetext={format(value)}
-      onChange={event => onChange(Number(event.target.value))} onBlur={onCommit} onPointerUp={onCommit} onKeyUp={onCommit} />
+      onChange={event => { setError(''); onChange(Number(event.target.value)); }} onBlur={onCommit} onPointerUp={onCommit} onKeyUp={onCommit} />
     {error && <p id={`${id}-error`} className="range-error" role="status">{error} Previous value restored.</p>}
   </div>;
 }

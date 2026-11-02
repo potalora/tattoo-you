@@ -5,7 +5,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {loadJsx} from './helpers/load-jsx.mjs';
 import {BODY_DEFAULTS} from '../studio/model.js';
 
-const [{CompositionPanel}, {ArtworkPanel}, {BodyPanel}, {RangeControl, closeMenuThen}, {StudyCard, Header, CameraDock, PreviewRecovery, observeRecoveryHeaderBounds}] = await Promise.all([
+const [{CompositionPanel, TattooCollection}, {ArtworkPanel}, {BodyPanel}, {RangeControl, closeMenuThen}, {StudyCard, Header, Inspector, CameraDock, PreviewRecovery, observeRecoveryHeaderBounds}] = await Promise.all([
   'composition-panel', 'artwork-panel', 'body-panel', 'primitives', 'main',
 ].map(name => loadJsx(new URL(`../studio/ui/${name}.jsx`, import.meta.url))));
 
@@ -19,28 +19,37 @@ function fixture() {
   }}};
 }
 
-test('instrument header exposes history without losing study, save and export controls', () => {
+test('instrument header exposes history without losing study, save and reference controls', () => {
   const props = withUI(fixture(), {ready: true, canUndo: true, canRedo: false, saveLabel: 'Saved in this browser', retry: {hidden: true, text: 'Retry save'}});
   const html = renderToStaticMarkup(React.createElement(Header, {...props, instrument: true}));
   assert.match(html, /aria-label="Undo"/);
   assert.match(html, /aria-label="Redo"/);
   assert.match(html, /id="project-select"/);
-  assert.match(html, /aria-label="Export image"/);
+  assert.match(html, /aria-label="Review reference"/);
+  assert.match(html, /aria-label="Compare studies"/);
+  assert.match(html, /id="direct-export"/);
   const redo = /<button\b[^>]*aria-label="Redo"[^>]*>/.exec(html)?.[0];
   assert.match(redo || '', /disabled/);
   const original = renderToStaticMarkup(React.createElement(Header, props));
   assert.doesNotMatch(original, /aria-label="Undo"/);
 });
 
-test('instrument exposes the layer bank by default while glass keeps its original disclosure', () => {
+test('instrument keeps original layer controls in an independent collection while glass retains its inline disclosure', () => {
   const props = fixture();
   props.snapshot.study.tattoos = [{id: 'layer', name: 'Original design', assetId: 'art', width: 7, visible: true, locked: true}];
   props.snapshot.workspace.assets = [{id: 'art', url: '/art.png'}];
   const instrument = renderToStaticMarkup(React.createElement(CompositionPanel, {...props, instrument: true}));
-  assert.match(instrument, /<details\b[^>]*class="control-details study-layers"[^>]*open=""/);
-  assert.match(instrument, /aria-label="Select Original design"/);
-  assert.match(instrument, /aria-label="Unlock Original design"/);
+  assert.doesNotMatch(instrument, /id="layers"|class="control-details study-layers"/);
+  const collection = renderToStaticMarkup(React.createElement(TattooCollection, props));
+  assert.match(collection, /data-surface-content="collection"/);
+  assert.match(collection, /<details\b[^>]*class="control-details study-layers"[^>]*open=""/);
+  assert.match(collection, /aria-label="Select Original design"/);
+  assert.match(collection, /aria-label="Unlock Original design"/);
+  for (const id of ['select-all', 'select-none', 'duplicate-layers', 'remove-layers', 'collection-add']) {
+    assert.equal((collection.match(new RegExp(`id="${id}"`, 'g')) || []).length, 1);
+  }
   const original = renderToStaticMarkup(React.createElement(CompositionPanel, props));
+  assert.match(original, /id="layers"/);
   assert.doesNotMatch(original, /<details\b[^>]*class="control-details study-layers"[^>]*open=""/);
   assert.equal(CompositionPanel.compare(props, {...props, instrument: true}), false);
 });
@@ -48,6 +57,96 @@ test('instrument exposes the layer bank by default while glass keeps its origina
 function withUI(props, change) {
   return {...props, snapshot: {...props.snapshot, ui: {...props.snapshot.ui, ...change}}};
 }
+
+function withTattoo(props = fixture()) {
+  props.snapshot.study.tattoos = [{id: 'ink', assetId: 'art', name: 'Artist reference', width: 7.5,
+    rotation: 0, opacity: .9, visible: true, locked: false, region: 'leftUpperArm'}];
+  props.snapshot.study.selectedIds = ['ink'];
+  props.snapshot.workspace.assets = [{id: 'art', name: 'Artist reference', url: '/art.png'}];
+  return props;
+}
+
+function findElement(node, predicate) {
+  if (!React.isValidElement(node)) return undefined;
+  if (predicate(node)) return node;
+  return React.Children.toArray(node.props.children).map(child => findElement(child, predicate)).find(Boolean);
+}
+
+function assertUniqueIds(html) {
+  const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map(([, id]) => id);
+  assert.equal(new Set(ids).size, ids.length, 'Mounted surfaces must not duplicate control or accessible-description ids');
+}
+
+test('comparison, reference review and immediate PNG download retain distinct reachable routes', () => {
+  const props = withTattoo(withUI(fixture(), {ready: true, retry: {hidden: true}}));
+  const calls = [];
+  props.app.actions = {
+    openComparison: () => calls.push('compare'), reviewReference: () => calls.push('review'),
+    saveImage: () => calls.push('download'),
+  };
+  const header = Header({...props, instrument: true});
+  const html = renderToStaticMarkup(header);
+  for (const [id, label] of [['compare-studies', 'Compare studies'], ['save-image', 'Review reference']]) {
+    const opening = new RegExp(`<button\\b[^>]*id="${id}"[^>]*>`).exec(html)?.[0];
+    assert.ok(opening);
+    assert.ok(opening.includes(`aria-label="${label}"`));
+    assert.doesNotMatch(opening, /\s(?:hidden|disabled)=/);
+    findElement(header, node => node.props.id === id).props.onClick();
+  }
+  const direct = findElement(StudyCard(props), node => node.props.id === 'direct-export');
+  assert.equal(direct.props.children, 'Download PNG now');
+  assert.equal(direct.props.disabled, false);
+  direct.props.onClick({currentTarget: {closest: () => null}});
+  findElement(Header(props), node => node.props.id === 'save-image').props.onClick();
+  assert.deepEqual(calls, ['compare', 'review', 'download', 'download']);
+  for (const change of [{blocked: true}, {ready: false}]) {
+    const unavailable = renderToStaticMarkup(React.createElement(Header, {...withUI(props, change), instrument: true}));
+    for (const id of ['compare-studies', 'save-image']) {
+      assert.match(new RegExp(`<button\\b[^>]*id="${id}"[^>]*>`).exec(unavailable)[0], /\sdisabled=""/);
+    }
+  }
+});
+
+test('instrument contextual tools expose the active adjustment and preserve each editable control', () => {
+  for (const tool of ['place', 'size', 'rotate', 'view', 'more']) {
+    const props = withTattoo(withUI(fixture(), {ready: true, adjustmentTool: tool}));
+    const html = renderToStaticMarkup(React.createElement(CompositionPanel, {...props, instrument: true}));
+    assert.match(html, new RegExp(`data-surface-content="composition" data-adjustment="${tool}"`));
+    const nav = /<nav\b[^>]*aria-label="Tattoo adjustment"[^>]*>(.*?)<\/nav>/.exec(html)?.[1];
+    assert.ok(nav);
+    const buttons = [...nav.matchAll(/<button\b([^>]*)>(.*?)<\/button>/g)];
+    assert.equal(buttons.length, 5);
+    for (const [index, label] of ['Place', 'Size', 'Rotate', 'View', 'More'].entries()) {
+      assert.equal(buttons[index][2], label);
+      assert.ok(buttons[index][1].includes(`aria-pressed="${label.toLowerCase() === tool}"`));
+    }
+    assert.match(html, /data-tool="size" role="group" aria-label="Width \(approx\.\) adjustment"/);
+    assert.match(html, /data-tool="rotate" role="group" aria-label="Rotation adjustment"/);
+    const more = /<details\b[^>]*class="control-details advanced-tattoo"[^>]*>/.exec(html)[0];
+    assert.equal(/\sopen=""/.test(more), tool === 'more');
+    for (const id of ['region', 'place-on-body', 'width', 'rotation', 'layer-name', 'offsetX', 'offsetY', 'opacity', 'flip']) {
+      assert.equal((html.match(new RegExp(`id="${id}"`, 'g')) || []).length, 1, `${tool}: ${id} retained once`);
+    }
+    assert.equal(CompositionPanel.compare(props, withUI(props, {adjustmentTool: tool === 'place' ? 'size' : 'place'})), false);
+  }
+});
+
+test('mounted Instrument inspector and combined adjustment/collection surfaces keep ids unique', () => {
+  for (const empty of [false, true]) {
+    const props = withUI(empty ? fixture() : withTattoo(), {ready: true, panelState: 'normal', surface: 'composition'});
+    const inspector = renderToStaticMarkup(React.createElement(Inspector, {...props, panelRef: {current: null}, instrument: true}));
+    assertUniqueIds(inspector);
+    const tabs = /<nav\b[^>]*aria-label="Workspace"[^>]*>(.*?)<\/nav>/.exec(inspector)?.[1];
+    for (const surface of ['composition', 'collection', 'body', 'artwork']) {
+      assert.equal((tabs.match(new RegExp(`data-surface="${surface}"`, 'g')) || []).length, 1);
+    }
+    const combined = renderToStaticMarkup(React.createElement(React.Fragment, null,
+      React.createElement(CompositionPanel, {...props, instrument: true}),
+      React.createElement(TattooCollection, props)));
+    assertUniqueIds(combined);
+    assert.equal((combined.match(/id="layers"/g) || []).length, 1);
+  }
+});
 
 function skipped(previous, next) {
   return [CompositionPanel, ArtworkPanel, BodyPanel].map(panel => panel.compare(previous, next));
@@ -72,11 +171,13 @@ test('search, import mode and placement updates reach only panels that display t
   assert.deepEqual(skipped(previous, withUI(previous, {blocked: true})), [false, false, false], 'Transaction blocking must disable every panel');
 });
 
-test('tattoo edits update composition without invalidating artwork or body controls', () => {
+test('first artwork updates body navigation while later tattoo edits leave body controls cached', () => {
   const previous = fixture();
   const study = {...previous.snapshot.study, notes: 'Check this placement', tattoos: [{id: 'new-layer'}]};
   const next = {...previous, snapshot: {...previous.snapshot, study}};
-  assert.deepEqual(skipped(previous, next), [false, true, true]);
+  assert.deepEqual(skipped(previous, next), [false, true, false]);
+  const editedLayer = {...study, tattoos: [{id: 'new-layer', width: 8}]};
+  assert.equal(BodyPanel.compare(next, {...next, snapshot: {...next.snapshot, study: editedLayer}}), true);
   const changedBody = {...study, body: {...study.body, stature: 180}};
   assert.deepEqual(skipped(previous, {...next, snapshot: {...next.snapshot, study: changedBody}}), [false, true, false]);
   const switchedStudy = {...study, id: 'other-study'};
@@ -224,6 +325,9 @@ test('clearing selection keeps existing layers available without empty-study gui
   assert.match(html, /aria-label="Select Existing design"/);
   assert.equal((html.match(/id="browse-art"/g) || []).length, 1);
   assert.ok(html.indexOf('id="layers"') < html.indexOf('id="browse-art"'), 'Existing layers come before the add-artwork action');
+  const instrument = renderToStaticMarkup(React.createElement(CompositionPanel, {...props, instrument: true}));
+  assert.match(instrument, /Choose a tattoo from the Tattoos tray/);
+  assert.doesNotMatch(instrument, /id="layers"|Try your first placement/);
 });
 
 
@@ -275,13 +379,26 @@ test('selected artwork uses its own compact preview and retains full title', () 
   assert.ok(html.indexOf('class="selection-preview"') < html.indexOf('id="region"'));
 });
 
-test('body source details are available without preceding the main controls with metadata', () => {
+test('body setup exposes reference, anatomy and starting profile before optional proportions', () => {
   const html = renderToStaticMarkup(React.createElement(BodyPanel, fixture()));
-  const disclosure = /<details\b[^>]*class="[^"]*body-source-details[^"]*"[^>]*>/.exec(html)?.[0];
-  assert.ok(disclosure, 'Body source metadata uses a disclosure');
-  assert.doesNotMatch(disclosure, /\bopen(?:=|\s|>)/, 'Metadata starts collapsed');
-  assert.match(html, /id="body-model"/);
-  assert.match(html, /id="stature"/);
+  const setup = /<section\b[^>]*class="[^"]*body-reference-setup[^"]*"[^>]*>(.*?)<\/section>/.exec(html)?.[1];
+  assert.ok(setup, 'Reference setup is a single visible section');
+  assert.doesNotMatch(setup, /<details/);
+  assert.ok(setup.indexOf('id="body-model"') < setup.indexOf('id="body"'));
+  assert.ok(setup.indexOf('id="body"') < setup.indexOf('id="body-profile"'));
+  assert.match(setup, /Choosing another body creates a new study\./);
+  assert.match(setup, />Next: add artwork</);
+  const proportions = /<details\b[^>]*class="[^"]*body-proportions-details[^"]*"[^>]*>(.*?)<\/details>/.exec(html);
+  assert.ok(proportions, 'Proportions use a separate disclosure');
+  assert.doesNotMatch(proportions[0].split('>')[0], /\bopen(?:=|\s|$)/);
+  assert.match(proportions[1], /<summary>Adjust proportions<\/summary>/);
+  assert.match(proportions[1], /id="stature"/);
+  assert.ok(html.indexOf('Next: add artwork') < proportions.index);
+  const props = fixture();
+  props.snapshot.study.tattoos = [{id: 'layer'}];
+  const withArtwork = renderToStaticMarkup(React.createElement(BodyPanel, props));
+  assert.match(withArtwork, />Back to adjustment</);
+  assert.doesNotMatch(withArtwork, />Next: add artwork</);
 });
 
 
@@ -294,12 +411,16 @@ test('image export stays distinct from automatic study saving', () => {
 });
 
 
-test('instrument empty study offers one clear artwork action without an empty layer bank', () => {
+test('instrument empty study exposes the reference and artwork setup actions before future placement', () => {
   const props = fixture();
   props.snapshot.study.tattoos = [];
   props.snapshot.study.selectedIds = [];
   const html = renderToStaticMarkup(React.createElement(CompositionPanel, {...props, instrument: true}));
-  assert.match(html, /Add artwork/);
+  assert.match(html, /<ol class="setup-steps">/);
+  assert.match(html, />Choose a reference</);
+  assert.match(html, />Add your artwork</);
+  assert.match(html, /class="setup-future"[^>]*>[\s\S]*Place and adjust/);
+  assert.equal((html.match(/id="browse-art"/g) || []).length, 1);
   assert.doesNotMatch(html, /Layer actions|Choose a tattoo|No tattoos added/);
 });
 

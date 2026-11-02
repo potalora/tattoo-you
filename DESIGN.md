@@ -151,17 +151,19 @@ Task feedback uses 13px text. Storage scope, layer measurements, fit guidance an
 
 ## Layout
 
-The desktop editor uses a top study/history/export rail, a framed viewing stage and a separately scrolling right inspector. The standard inspector is fixed width (340px), reduced on tablet (310px). Outer clearance follows the workspace spacing token; the stage-to-inspector gap is compact (14px). Composition, Artwork and Body panels retain their state while hidden.
+The desktop editor uses a study/history/comparison/reference rail, a recessed viewing stage and a separately scrolling right control deck. The standard deck is fixed width (340px), reduced on tablet (310px). Outer clearance follows the workspace spacing token; the stage-to-deck gap is compact (14px). Adjust, Tattoos and Body have distinct surfaces; Add opens the artwork library. Panels retain their state while hidden. The study name has one visible home in the selector.
 
-At phone width (700px and below), the rail becomes two rows and controls become a bottom sheet with collapsed, normal and expanded stops. The dedicated handle alone owns dragging; the live animated sheet height determines the unobscured viewing area. Short landscape (height 500px and below) restores a side inspector. Short portrait retains a genuine sheet with a compact rail. Preserve safe-area clearance and the measured recovery-header allowance.
+At phone width (700px and below), the rail stays in one compact row and controls become a bottom deck with collapsed, normal and expanded stops. The dedicated handle alone owns dragging; the live animated sheet height determines the unobscured viewing area. Short landscape (height 500px and below) restores a side inspector. Short portrait retains a genuine sheet with distinct stops. Preserve safe-area clearance and the measured recovery-header allowance.
 
-The selected-tattoo header groups Detail and Lock actions. Width and Rotation come first, side by side on phones, so a single selected tattoo can be adjusted in the normal sheet. One shared explanation describes group edits and locked scope. New alternatives start with a short distinguishing label, `Copy` or `Copy 2`, before the source title; existing names stay intact.
+The selected-tattoo header identifies the current selection and its lock scope. Desktop shows exact Width and Rotation followed by placement and deeper adjustments. Phones use tactile Place / Size / Rotate / View / More keys and expose one active tool. The Tattoos surface is always reachable without scrolling past those properties. One shared explanation describes group edits and locked scope. New alternatives start with `Copy` or `Copy 2`; existing names stay intact.
+
+Empty studies offer Reference → Artwork → Placement. Body source, anatomy and starting profile precede fine proportion controls. Import focuses the tattoo in Detail. Orbit, Detail and an Angles selector form a compact camera bank. Comparison and reference review use solid, focused work surfaces: paired A/B captures on desktop, a same-size A/B switch on phones, and the exact reference PNG with download/return actions.
 
 Public pages use a centered shell (maximum 1440px), generous outer gutters and heading/copy rows. These collapse to one column at 600px. They share materials and type, not the editor's fixed-canvas layout.
 
 ## Elevation & Depth
 
-Instrument is opaque and mostly flat. Tonal recesses and borders establish the preview and fields. Buttons have shallow inset highlights and a small lower edge; pressed states become inset. Menus and dialogs use a modest soft shadow, without backdrop blur. Do not flatten away state feedback or import Glass blur.
+Instrument is opaque and tactile, with a clear Teenage Engineering influence. Tonal recesses and thin borders establish the display and fields. Solid control decks and raised keys are part of the identity, not disposable chrome. Buttons have shallow inset highlights and a small lower edge; pressed states become inset. Menus and dialogs use a modest soft shadow without backdrop blur. Structural simplification must retain this physical character.
 
 ### Shadow Vocabulary
 
@@ -191,7 +193,7 @@ Study actions closes on Escape and restores focus to its trigger. An outside poi
 
 ### Cards / Containers
 
-Artwork cards are bordered putty rectangles with paper previews and separate, always visible add actions. Layer rows use a tinted selected state and orange edge; their actions remain reachable by touch and keyboard. Panels, dialogs and menus use the solid surface vocabulary. Do not turn informational rows into decorative floating cards.
+Artwork cards are bordered putty rectangles with paper previews and separate, always visible add actions. Collection rows use a tinted selected state and a thin complete boundary; their actions remain reachable by touch and keyboard. Panels, dialogs and menus use the solid surface vocabulary. Do not turn informational rows into decorative floating cards.
 
 ### Range Controls and Sheet
 

@@ -59,6 +59,7 @@ function BodyPanelView({app, snapshot}) {
   const fixed = model.supportsShapeControls === false;
   const fixedSkin = model.supportsSkinTone === false;
   const blocked = Boolean(ui.blocked);
+  const hasArtwork = study.tattoos.length > 0;
   const anatomies = model.anatomies || ['male', 'female'];
   const stats = ui.stats || {};
   const preview = ui.preview || {phase: 'idle'};
@@ -89,10 +90,8 @@ function BodyPanelView({app, snapshot}) {
   return <section data-surface-content="body"><div data-panel-content="body">
     <h2 className="sr-only">Body reference</h2>
     <PreparedCompositionGuidance app={app} snapshot={snapshot} />
-    <p className="hint body-lock-scope">Locks protect tattoo placement. Body proportions can still change.</p>
-    <details className="control-details body-source-details">
-      <summary>Body source <span>{model.label}</span></summary>
-      <div className="body-model-control">
+    <section className="body-reference-setup" aria-labelledby="body-reference-title">
+      <h3 id="body-reference-title">Choose a body reference</h3>
       <Field label="Body source" htmlFor="body-model">
         <Select id="body-model" aria-label="Body source" aria-describedby="body-model-hint body-model-source" value={model.id}
           disabled={blocked} onValueChange={actions.useBodyModel}
@@ -101,23 +100,28 @@ function BodyPanelView({app, snapshot}) {
       <p id="body-model-source" className="hint">{model.source.split(' · ')[0]}</p>
       <p id="body-model-hint" className="hint">{model.anatomyTopologyCompatible === false ? 'Changing body or anatomy creates a new study.' : 'Choosing another body creates a new study.'}</p>
       <p id="body-legacy-note" className="hint" hidden={!model.legacyOnly}>Saved reference. {model.id === 'drummyfish-v1' ? 'Hair and underwear are part of this body. ' : ''}Your original study stays unchanged.</p>
-      </div>
-    </details>
-    <p id="body-limit-note" className="hint" hidden={!legacyRefinements}>Saved proportions exceed these sliders. Reset proportions to use the current range.</p>
-    <div id="body-ranges" data-shape-control="" hidden={fixed}>{ranges('main')}</div>
-    <details className="control-details">
-      <summary>Body options</summary>
-      <p id="body-shape-hint" className="hint" hidden={fixed}>Adjust a starting shape, then refine it.</p>
-      <p id="body-fixed-note" className="hint" hidden={!fixed}>This body has fixed proportions.</p>
+      <Field label="Anatomy">
+        <Select id="body" aria-label="Anatomy model" value={body.body} disabled={blocked || anatomies.length < 2}
+          onValueChange={actions.changeAnatomy} items={anatomyItems(model)} />
+      </Field>
       <Field label="Starting profile" data-shape-control="" hidden={fixed}>
         <Select id="body-profile" aria-label="Starting profile" value={bodyProfileId(body)} disabled={fixed || blocked}
           onValueChange={actions.setBodyProfile} items={[...BODY_PROFILES.map(profile => ({value: profile.id, label: profile.label})),
             {value: 'custom', label: 'Custom proportions', disabled: true}]} />
       </Field>
-      <Field label="Anatomy model">
-        <Select id="body" aria-label="Anatomy model" value={body.body} disabled={blocked || anatomies.length < 2}
-          onValueChange={actions.changeAnatomy} items={anatomyItems(model)} />
-      </Field>
+      <p id="body-fixed-note" className="hint" hidden={!fixed}>This body has fixed proportions.</p>
+      <Button id="body-setup-next" className="body-setup-next" variant={hasArtwork ? 'secondary' : 'primary'} disabled={blocked}
+        onClick={() => actions.showSurface(hasArtwork ? 'composition' : 'artwork')}>
+        {hasArtwork ? 'Back to adjustment' : 'Next: add artwork'}
+      </Button>
+    </section>
+    <p className="hint body-lock-scope" hidden={!hasArtwork}>Locks protect tattoo placement. Body proportions can still change.</p>
+    <details className="control-details body-proportions-details" data-shape-control="" hidden={fixed}>
+      <summary>Adjust proportions</summary>
+      <p id="body-shape-hint" className="hint" hidden={fixed}>Adjust a starting shape, then refine it.</p>
+      <p id="body-limit-note" className="hint" hidden={!legacyRefinements}>Saved proportions exceed these sliders. Reset proportions to use the current range.</p>
+      <div id="body-ranges" data-shape-control="" hidden={fixed}>{ranges('main')}</div>
+      <Button id="reset-body" data-shape-control="" hidden={fixed} disabled={fixed || blocked} onClick={() => actions.resetBody()}>Reset proportions</Button>
     </details>
     <details className="control-details" data-shape-control="" hidden={fixed}>
       <summary>Refine proportions</summary>
@@ -158,7 +162,6 @@ function BodyPanelView({app, snapshot}) {
       </div>
     </section>
     <output id="body-measurements" className="hint">{measurements && `Approximate model measurements: ${measurements}. These are reference dimensions, not measured personal circumferences.`}</output>
-    <Button id="reset-body" data-shape-control="" hidden={fixed} disabled={fixed || blocked} onClick={() => actions.resetBody()}>Reset proportions</Button>
     <div className="preview-controls">
       <div className="small-actions">
         <Button id="raytrace" variant="ghost" type="button" disabled={blocked || busy || stats.renderer !== 'WebGPU'}
@@ -179,6 +182,7 @@ export function bodyPanelPropsEqual(previous, next) {
   const a = previous.snapshot, b = next.snapshot, x = a.ui || {}, y = b.ui || {};
   const previewA = x.preview || {}, previewB = y.preview || {};
   return previous.app === next.app && a.study?.id === b.study?.id && a.study?.body === b.study?.body &&
+    Boolean(a.study?.tattoos?.length) === Boolean(b.study?.tattoos?.length) &&
     a.runtimeCapabilities?.preparedComposition?.projectId === b.runtimeCapabilities?.preparedComposition?.projectId && x.blocked === y.blocked && x.lighting === y.lighting && x.quality === y.quality &&
     MEASUREMENTS.every(([key]) => x.measurements?.[key] === y.measurements?.[key]) &&
     previewA.phase === previewB.phase && Math.floor(previewA.samples || 0) === Math.floor(previewB.samples || 0) &&

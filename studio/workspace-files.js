@@ -14,6 +14,7 @@ export function createWorkspaceFiles(state, services) {
   } = services;
   const browser = {
     Image: globalThis.Image,
+    FileReader: globalThis.FileReader,
     document: globalThis.document, Blob: globalThis.Blob,
     ...services.browser,
   };
@@ -112,7 +113,8 @@ export function createWorkspaceFiles(state, services) {
     } finally { setInteractionBlocked(wasBlocked); }
   }
 
-  async function saveImage() {
+  async function prepareReference() {
+    const wasBlocked = getInteractionBlocked();
     setInteractionBlocked(true);
     try {
       if ((state.renderTask && !await state.renderTask) || !state.lastRenderOK) {
@@ -140,12 +142,32 @@ export function createWorkspaceFiles(state, services) {
       lines.forEach((line, index) => context.fillText(line, 20, crop.height + 30 + index * 22));
       const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
       if (!blob) throw Error('The reference image could not be created. Try again.');
-      download('inkform-' + study.name.replace(/[^a-z0-9]/gi, '-') + '-' + (capture.view === 'custom' ? 'custom-view' : capture.view).replace(/[^a-z0-9]/gi, '-') + '.png', blob);
-      say('Reference download started. Open the PNG to check it; save another view for wrapping artwork.');
+      // Read the encoded PNG itself so the review and download share exact bytes.
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new browser.FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error || Error('The reference preview could not be read. Try again.'));
+        reader.readAsDataURL(blob);
+      });
+      return {
+        blob, dataUrl,
+        filename: 'inkform-' + study.name.replace(/[^a-z0-9]/gi, '-') + '-' + (capture.view === 'custom' ? 'custom-view' : capture.view).replace(/[^a-z0-9]/gi, '-') + '.png',
+        studyName: study.name, view: capture.view,
+        width: canvas.width, height: canvas.height, caption: lines.join('\n'),
+      };
     } finally {
-      setInteractionBlocked(false);
+      setInteractionBlocked(wasBlocked);
     }
   }
 
-  return {uploadFiles, removeArtwork, exportBackup, saveImage};
+  function downloadReference(prepared) {
+    download(prepared.filename, prepared.blob);
+    say('Reference download started. Save another view for wrapping artwork.');
+  }
+
+  async function saveImage() {
+    downloadReference(await prepareReference());
+  }
+
+  return {uploadFiles, removeArtwork, exportBackup, prepareReference, downloadReference, saveImage};
 }
